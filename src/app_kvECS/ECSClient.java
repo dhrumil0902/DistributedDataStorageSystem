@@ -2,10 +2,18 @@ package app_kvECS;
 
 import java.util.Map;
 import java.util.Collection;
+import java.util.TreeMap;
 
+
+import ecs.ECSNode;
 import ecs.IECSNode;
-
 public class ECSClient implements IECSClient {
+
+    BST nodes;
+
+    public ECSClient() {
+        nodes = new BST();
+    }
 
     @Override
     public boolean start() {

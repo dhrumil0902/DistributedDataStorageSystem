@@ -146,4 +146,8 @@ public class KVStorage {
             throw new RuntimeException("Error: Failed to clear storage file", e);
         }
     }
+
+    public File getFile() {
+        return this.file;
+    }
 }

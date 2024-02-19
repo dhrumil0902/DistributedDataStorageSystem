@@ -1,5 +1,14 @@
 package app_kvServer;
 
+import java.net.BindException;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.AbstractMap.SimpleEntry;
+import java.io.IOException;
+
 import app_kvServer.kvCache.FIFOCache;
 import app_kvServer.kvCache.IKVCache;
 import app_kvServer.kvCache.LFUCache;
@@ -8,15 +17,13 @@ import logger.LogSetup;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
-import java.io.IOException;
-import java.net.BindException;
 import java.net.InetSocketAddress;
+
+
 import java.net.ServerSocket;
-import java.net.Socket;
-import java.util.AbstractMap.SimpleEntry;
-import java.util.Arrays;
 import java.util.Map;
 
+import org.apache.log4j.Logger;
 
 public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
     /**
@@ -33,14 +40,18 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
     private static Logger logger = Logger.getRootLogger();
     int cacheSize;
     CacheStrategy strategy;
-    private int port;
-    private ServerSocket serverSocket;
+    private int clientPort;
+    private int serverPort;
+    private ServerSocket clientServerSocket;
+    private ServerSocket serverServerSocket;
     private boolean running;
     private String address;
     private String directoryDB;
     private IKVCache cache;
     private KVStorage storage;
     private final Object lock = new Object();
+
+    private List<ClientConnection> clientConnections = new ArrayList<ClientConnection>();
 
     public KVServer(int port, int cacheSize, String strategy) {
         this(port, cacheSize, strategy, "localhost", System.getProperty("user.dir"));
@@ -240,6 +251,7 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
                 try {
                     Socket client = serverSocket.accept();
                     ClientConnection connection = new ClientConnection(client, this);
+                    clientConnections.add(connection);
                     new Thread(connection).start();
 
                     logger.info(
@@ -279,6 +291,9 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
         }
         try {
             serverSocket.close();
+            for (ClientConnection connection : clientConnections) {
+                connection.close();
+            }
         } catch (IOException e) {
             logger.error("Error! " +
                     "Unable to close socket on port: " + port, e);
@@ -288,16 +303,29 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
     private boolean initializeServer() {
         logger.info("Initialize server ...");
         try {
-            InetSocketAddress socketAddress = new InetSocketAddress(address, port);
-            serverSocket = new ServerSocket();
-            serverSocket.bind(socketAddress);
-            logger.info("Server listening on port: " + serverSocket.getLocalPort());
-            return true;
+            InetSocketAddress clientSocketAddress = new InetSocketAddress(address, clientPort);
+            clientServerSocket = new ServerSocket();
+            clientServerSocket.bind(clientSocketAddress);
+            logger.info("Client Socket listening on " + address + ":" + clientPort);
+        } catch (BindException e) {
+            logger.error("Error! Client port " + clientPort + " is already bound!", e);
+            return false;
         } catch (IOException e) {
-            logger.error("Error! Cannot open server socket:");
-            if (e instanceof BindException) {
-                logger.error("Port " + port + " is already bound!");
-            }
+            logger.error("Error! Cannot open client server socket due to an I/O error.", e);
+            return false;
+        }
+
+        try {
+            InetSocketAddress serverSocketAddress = new InetSocketAddress(address, serverPort);
+            serverServerSocket = new ServerSocket();
+            serverServerSocket.bind(serverSocketAddress);
+            logger.info("Server Socket listening on " + address + ":" + serverPort);
+            return true;
+        } catch (BindException e) {
+            logger.error("Error! Server port " + serverPort + " is already bound!", e);
+            return false;
+        } catch (IOException e) {
+            logger.error("Error! Cannot open server server socket due to an I/O error.", e);
             return false;
         }
     }
@@ -454,8 +482,7 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
         String address = "localhost";
         String directory = System.getProperty("user.dir");
         String logFile = System.getProperty("user.dir") + "/server.log";
-        Level Level;
-        Level logLevel = org.apache.log4j.Level.ALL;
+        Level logLevel = Level.ALL;
         CacheStrategy strategy = CacheStrategy.None;
         int cacheSize = 10;
 
@@ -487,7 +514,7 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
                         break;
                     case "-ll":
                         if (LogSetup.isValidLevel(args[i + 1]))
-                            logLevel = org.apache.log4j.Level.toLevel(args[i + 1]);
+                            logLevel = Level.toLevel(args[i + 1]);
                         else {
                             System.out.println("Invalid log level: " + args[i + 1]);
                             System.out.println(helpString);
@@ -522,7 +549,12 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
 
         try {
             new LogSetup(logFile, logLevel);
-            new KVServer(port, cacheSize, strategy.toString(), address, directory);
+            final KVServer server = new KVServer(port, cacheSize, strategy.toString(), address, directory);
+            Runtime.getRuntime().addShutdownHook(new Thread() {
+                public void run() {
+                    server.close();
+                }
+            });
         } catch (IOException e) {
             System.out.println("Error! Unable to initialize logger!");
             System.exit(1);

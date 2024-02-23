@@ -1,5 +1,6 @@
 package app_kvServer;
 
+import java.io.File;
 import java.net.BindException;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -22,6 +23,8 @@ import java.net.InetSocketAddress;
 
 import java.net.ServerSocket;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.apache.log4j.Logger;
 
@@ -46,10 +49,11 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
     private ServerSocket serverServerSocket;
     private boolean running;
     private String address;
-    private String directoryDB;
+    private String storagePath;
     private IKVCache cache;
     private KVStorage storage;
     private final Object lock = new Object();
+    private ExecutorService threadPool;
 
     private List<ClientConnection> clientConnections = new ArrayList<ClientConnection>();
 
@@ -57,8 +61,9 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
         this(port, cacheSize, strategy, "localhost", System.getProperty("user.dir"));
     }
 
-    public KVServer(int port, int cacheSize, String strategy, String address, String directoryDB) {
-        this.directoryDB = directoryDB;
+    public KVServer(int port, int cacheSize, String strategy, String address, String storageDir) {
+        String fileName = address + "_" + port + ".txt";
+        this.storagePath = storageDir + File.separator + fileName;
         this.address = address;
         this.port = port;
         this.cacheSize = cacheSize;
@@ -222,6 +227,10 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
         }
     }
 
+    public String getStoragePath() {
+        return this.storagePath;
+    }
+
     @Override
     public void clearCache() {
         if (cache != null) {
@@ -238,6 +247,26 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
         }
     }
 
+    private void writeEvictedToStorage(String key, String value) throws RuntimeException{
+        try {
+            storage.putKV(key, value);
+        } catch (RuntimeException e) {
+            throw new RuntimeException(String.format("Error writing evicted Key %s to disk. %s", key, e.getMessage()));
+        }
+    }
+
+    public void syncCacheToStorage() {
+        if (cacheSize != 0) {
+            for (Map.Entry<String, String> entry : cache.getStoredData().entrySet()) {
+                try {
+                    storage.putKV(entry.getKey(), entry.getValue());
+                } catch (RuntimeException e) {
+                    logger.error("Failed to sync cache.", e);
+                }
+            }
+        }
+    }
+
     public void startServer() {
         new Thread(this).start();
     }
@@ -245,23 +274,63 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
     @Override
     public void run() {
         running = initializeServer();
+        threadPool = Executors.newCachedThreadPool();
 
-        if (serverSocket != null) {
+        if (clientServerSocket != null) {
+            threadPool.execute(new ClientListener(clientServerSocket, this));
+        }
+
+        if (serverServerSocket != null) {
+            threadPool.execute(new ServerListener(serverServerSocket, this));
+        }
+    }
+
+    private class ClientListener implements Runnable {
+        private final ServerSocket serverSocket;
+        private final KVServer server;
+
+        public ClientListener(ServerSocket serverSocket, KVServer server) {
+            this.serverSocket = serverSocket;
+            this.server = server;
+        }
+
+        public void run() {
             while (isRunning()) {
                 try {
-                    Socket client = serverSocket.accept();
-                    ClientConnection connection = new ClientConnection(client, this);
-                    clientConnections.add(connection);
-                    new Thread(connection).start();
+                    Socket clientSocket = serverSocket.accept();
+                    ClientConnection connection = new ClientConnection(clientSocket, server);
+                    threadPool.execute(connection);
 
-                    logger.info(
-                            "From Server: Connected to " + client.getInetAddress().getHostName() + " on port " + client.getPort());
+                    logger.info("Connected to client at " + clientSocket.getInetAddress().getHostName() + " on port " + client.getPort());
                 } catch (IOException e) {
-                    logger.error("Error! Unable to establish connection. \n", e);
+                    logger.error("Error accepting client connection", e);
                 }
             }
         }
-        logger.info("Server stopped.");
+    }
+
+    private class ServerListener implements Runnable {
+        private final ServerSocket serverSocket;
+        private final KVServer server;
+
+        public ServerListener(ServerSocket serverSocket, KVServer server) {
+            this.serverSocket = serverSocket;
+            this.server = server;
+        }
+
+        public void run() {
+            while (isRunning()) {
+                try {
+                    Socket serverSocket = serverSocket.accept();
+                    ServerConnection connection = new ServerConnection(server, server);
+                    threadPool.execute(connection);
+
+                    logger.info("Connected to server at " + server.getInetAddress().getHostName() + " on port " + server.getPort());
+                } catch (IOException e) {
+                    logger.error("Error accepting server connection", e);
+                }
+            }
+        }
     }
 
     @Override
@@ -280,15 +349,7 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
     public void close() {
         logger.info("Closing server.");
         running = false;
-        if (cacheSize != 0) {
-            for (Map.Entry<String, String> entry : cache.getStoredData().entrySet()) {
-                try {
-                    storage.putKV(entry.getKey(), entry.getValue());
-                } catch (RuntimeException e) {
-                    logger.error("Failed to sync cache.", e);
-                }
-            }
-        }
+        syncCacheToStorage();
         try {
             serverSocket.close();
             for (ClientConnection connection : clientConnections) {
@@ -298,6 +359,7 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
             logger.error("Error! " +
                     "Unable to close socket on port: " + port, e);
         }
+        threadPool.shutdownNow();
     }
 
     private boolean initializeServer() {
@@ -449,14 +511,6 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
 
     public void setAddress(String address) {
         this.address = address;
-    }
-
-    private void writeEvictedToStorage(String key, String value) throws RuntimeException{
-        try {
-            storage.putKV(key, value);
-        } catch (RuntimeException e) {
-            throw new RuntimeException(String.format("Error writing evicted Key %s to disk. %s", key, e.getMessage()));
-        }
     }
 
     private static String generateHelpString() {

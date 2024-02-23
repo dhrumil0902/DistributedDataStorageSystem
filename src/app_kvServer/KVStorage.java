@@ -15,8 +15,8 @@ public class KVStorage {
 
     private static Logger logger = Logger.getRootLogger();
 
-    public KVStorage(String storageDir) {
-        filePath = Paths.get(storageDir, "data.txt");
+    public KVStorage(String storagePath) {
+        filePath = Paths.get(storagePath);
         try {
             Files.createDirectories(filePath.getParent());
         } catch (IOException e) {

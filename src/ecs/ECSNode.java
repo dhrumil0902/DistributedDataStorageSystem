@@ -23,7 +23,7 @@ public class ECSNode implements IECSNode {
     }
 
     public void startServer() {
-        kvServer = new KVServer(nodePort, cacheSize, strategy, nodeHost, dBStoragePath);
+        return;
     }
     public String getNodeName(){
         return this.nodeName;

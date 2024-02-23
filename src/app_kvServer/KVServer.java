@@ -10,10 +10,7 @@ import java.util.List;
 import java.util.AbstractMap.SimpleEntry;
 import java.io.IOException;
 
-import app_kvServer.kvCache.FIFOCache;
-import app_kvServer.kvCache.IKVCache;
-import app_kvServer.kvCache.LFUCache;
-import app_kvServer.kvCache.LRUCache;
+import app_kvServer.kvCache.*;
 import logger.LogSetup;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -40,7 +37,7 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
      * currently not contained in the cache. Options are "FIFO", "LRU",
      * and "LFU".
      */
-    private static Logger logger = Logger.getRootLogger();
+    private static final Logger logger = Logger.getRootLogger();
     int cacheSize;
     CacheStrategy strategy;
     private int clientPort;
@@ -49,23 +46,24 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
     private ServerSocket serverServerSocket;
     private boolean running;
     private String address;
-    private String storagePath;
-    private IKVCache cache;
-    private KVStorage storage;
+    private final String storagePath;
+    private final IKVCache cache;
+    private final KVStorage storage;
     private final Object lock = new Object();
     private ExecutorService threadPool;
 
     private List<ClientConnection> clientConnections = new ArrayList<ClientConnection>();
 
-    public KVServer(int port, int cacheSize, String strategy) {
-        this(port, cacheSize, strategy, "localhost", System.getProperty("user.dir"));
-    }
+//    public KVServer(int port, int cacheSize, String strategy) {
+//        this(port, cacheSize, strategy, "localhost", System.getProperty("user.dir"));
+//    }
 
-    public KVServer(int port, int cacheSize, String strategy, String address, String storageDir) {
-        String fileName = address + "_" + port + ".txt";
+    public KVServer(int clientPort, int serverPort, int cacheSize, String strategy, String address, String storageDir) {
+        String fileName = address + "_" + clientPort + ".txt";
         this.storagePath = storageDir + File.separator + fileName;
         this.address = address;
-        this.port = port;
+        this.clientPort = clientPort;
+        this.serverPort = serverPort
         this.cacheSize = cacheSize;
         try {
             this.strategy = CacheStrategy.valueOf(strategy);
@@ -87,13 +85,13 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
                 this.cache = new FIFOCache(0);
                 break;
         }
-        this.storage = new KVStorage(directoryDB);
+        this.storage = new KVStorage(this.storagePath);
         startServer();
     }
 
     @Override
     public int getPort() {
-        return port;
+        return clientPort;
     }
 
     @Override
@@ -287,21 +285,22 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
 
     private class ClientListener implements Runnable {
         private final ServerSocket serverSocket;
-        private final KVServer server;
+        private final ServerConnectionListener connectionListener;
 
-        public ClientListener(ServerSocket serverSocket, KVServer server) {
+        public ClientListener(ServerSocket serverSocket, ServerConnectionListener connectionListener) {
             this.serverSocket = serverSocket;
-            this.server = server;
+            this.connectionListener = connectionListener;
         }
 
         public void run() {
             while (isRunning()) {
                 try {
                     Socket clientSocket = serverSocket.accept();
-                    ClientConnection connection = new ClientConnection(clientSocket, server);
+                    ClientConnection connection = new ClientConnection(clientSocket, connectionListener);
                     threadPool.execute(connection);
 
-                    logger.info("Connected to client at " + clientSocket.getInetAddress().getHostName() + " on port " + client.getPort());
+                    logger.info("Connected to client at " + clientSocket.getInetAddress().getHostName() +
+                            " on port " + clientSocket.getPort());
                 } catch (IOException e) {
                     logger.error("Error accepting client connection", e);
                 }
@@ -321,11 +320,12 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
         public void run() {
             while (isRunning()) {
                 try {
-                    Socket serverSocket = serverSocket.accept();
-                    ServerConnection connection = new ServerConnection(server, server);
+                    Socket clientSocket = serverSocket.accept();
+                    ServerConnection connection = new ServerConnection(clientSocket, server);
                     threadPool.execute(connection);
 
-                    logger.info("Connected to server at " + server.getInetAddress().getHostName() + " on port " + server.getPort());
+                    logger.info("Connected to server at " + clientSocket.getInetAddress().getHostName() +
+                            " on port " + clientSocket.getPort());
                 } catch (IOException e) {
                     logger.error("Error accepting server connection", e);
                 }

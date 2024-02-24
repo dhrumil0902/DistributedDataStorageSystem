@@ -21,12 +21,9 @@ import org.apache.log4j.Logger;
 import java.net.InetSocketAddress;
 
 
-import java.net.ServerSocket;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-
-import org.apache.log4j.Logger;
 
 public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
     /**
@@ -109,6 +106,10 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
     @Override
     public int getCacheSize() {
         return cacheSize;
+    }
+
+    public String getStoragePath() {
+        return this.storagePath;
     }
 
     @Override
@@ -227,8 +228,17 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
         }
     }
 
-    public String getStoragePath() {
-        return this.storagePath;
+    public void appendDataToStorage(List<String> data) {
+        storage.putList(data);
+    }
+
+    public List<String> getAllData() {
+        try {
+            return storage.getAllData();
+        } catch (IOException e) {
+            logger.error("Unable to retrieve data from storage", e);
+            return null;
+        }
     }
 
     @Override

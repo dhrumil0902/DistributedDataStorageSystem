@@ -1,13 +1,13 @@
-package app_kvServer.kvCache;
+package app_kvServer;
 
 import app_kvECS.BST;
-import app_kvServer.KVServer;
+import app_kvECS.ECSMessage;
+import app_kvECS.ECSMessage;
 import org.apache.log4j.*;
 
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.PrintWriter;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.zip.*;
@@ -21,8 +21,8 @@ public class ServerConnection implements Runnable{
     private static BST ecsNodes;
     private final Socket clientSocket;
     private final KVServer server;
-    private BufferedReader input;
-    private BufferedWriter output;
+    private ObjectInputStream input;
+    private ObjectOutputStream output;
     private boolean isOpen;
 
     public ServerConnection(Socket clientSocket, KVServer server) {
@@ -33,8 +33,8 @@ public class ServerConnection implements Runnable{
     @Override
     public void run() {
         try {
-            input = new BufferedReader(new InputStreamReader(clientSocket.getInputStream(), StandardCharsets.UTF_8));
-            output = new BufferedWriter(new OutputStreamWriter(clientSocket.getOutputStream(), StandardCharsets.UTF_8));
+            input = new ObjectInputStream(clientSocket.getInputStream());
+            output = new ObjectOutputStream(clientSocket.getOutputStream());
             while (isOpen) {
                 handleMessage();
             }
@@ -54,21 +54,35 @@ public class ServerConnection implements Runnable{
     }
 
     private void handleMessage() throws IOException {
-        String msg = input.readLine();
+        ECSMessage msg;
+        try {
+            msg = (ECSMessage) input.readObject();
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException(e);
+        }
         if (msg == null) {
             isOpen = false;
+            return;
         }
-        switch (msg) {
-            case "BEGIN_TRANSFER":
-                receiveData();
-                sendMessage("DATA_RECEIVED");
+        ECSMessage response = new ECSMessage();
+        switch (msg.getAction()) {
+            case SET_WRITE_LOCK:
+
+            case APPEND:
+                server.appendDataToStorage(msg.getData());
+                response.setAction(msg.getAction());
+                response.setSuccess(true);
+            case GET_ALL:
+                response.setData(server.getAllData());
+                response.setSuccess(true);
             default:
                 logger.error("Unknown identified message from server: " + msg);
         }
+        sendMessage(response);
     }
 
-    private void sendMessage(String msg) throws IOException {
-        output.write(msg + "\n");
+    private void sendMessage(ECSMessage responseMessage) throws IOException {
+        output.writeObject(responseMessage);
         output.flush();
     }
 

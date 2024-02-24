@@ -44,6 +44,18 @@ public class KVStorage {
         }
     }
 
+    public synchronized void putList(List<String> data) {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(this.file, true))) {
+            for (String entry : data) {
+                writer.write(entry);
+                writer.newLine();
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Error: Could not write to storage.", e);
+        }
+    }
+
+
     public synchronized void updateKV(String key, String value) throws RuntimeException{
         List<String> lines;
         try {
@@ -118,6 +130,10 @@ public class KVStorage {
             throw new RuntimeException("Error: Storage file not found.", e);
         }
         return null;
+    }
+
+    public synchronized List<String> getAllData() throws IOException {
+        return Files.readAllLines(filePath);
     }
 
     public synchronized boolean inStorage(String key) throws RuntimeException{

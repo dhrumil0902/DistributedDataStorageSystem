@@ -1,15 +1,14 @@
 package ecs;
-
 import app_kvServer.KVServer;
 
 public class ECSNode implements IECSNode {
-    private KVServer kvServer;
+    public KVServer kvServer;
     private String nodeName;
     private String nodeHost;
     private int nodePort;
-    private String[] nodeHashRange;
+    public String[] nodeHashRange;
     private int cacheSize;
-    private String dBStoragePath;
+    public String dBStoragePath;
     private String strategy;
 
 
@@ -27,7 +26,7 @@ public class ECSNode implements IECSNode {
         kvServer = new KVServer(nodePort, cacheSize, strategy, nodeHost, dBStoragePath);
     }
     public String getNodeName(){
-        return null;
+        return this.nodeName;
     }
 
     public String getNodeHost(){
@@ -41,4 +40,5 @@ public class ECSNode implements IECSNode {
     public String[] getNodeHashRange(){
         return null;
     }
+
 }

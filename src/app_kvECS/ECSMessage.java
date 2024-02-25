@@ -52,7 +52,7 @@ class Main {
         }
     }
 
-    static String serializeToString(Object obj) {
+     static String serializeToString(Object obj) {
         try {
             ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
             ObjectOutputStream objectOutputStream = new ObjectOutputStream(byteArrayOutputStream);
@@ -65,7 +65,7 @@ class Main {
         }
     }
 
-    static ECSMessage deserializeFromString(String serializedString) {
+     static ECSMessage deserializeFromString(String serializedString) {
         try {
             byte[] data = Base64.getDecoder().decode(serializedString);
             ObjectInputStream objectInputStream = new ObjectInputStream(new ByteArrayInputStream(data));

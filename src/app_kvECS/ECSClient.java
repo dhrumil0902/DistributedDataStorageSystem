@@ -7,9 +7,18 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.util.*;
-
+import java.io.*;
+import app_kvECS.app_kvClient.KVClient;
+import app_kvECS.app_kvClient.client.CommManager;
+import app_kvECS.app_kvClient.client.KVStore;
+import app_kvServer.IKVServer;
+import app_kvServer.KVServer;
 import ecs.ECSNode;
 import ecs.IECSNode;
+import app_kvECS.app_kvClient.client.KVStore;
+import logger.LogSetup;
+import org.apache.log4j.Level;
+
 public class ECSClient implements IECSClient {
 
     public BST nodes;
@@ -21,20 +30,44 @@ public class ECSClient implements IECSClient {
 
     @Override
     public boolean start() {
-        // TODO
-        return false;
+        for (IECSNode node : nodes.values()){
+            ECSNode escNode = (ECSNode) node;
+            if (escNode.kvServer == null) {
+                escNode.startServer();
+            }
+        }
+        return true;
     }
 
     @Override
     public boolean stop() {
-        // TODO
-        return false;
+        for (IECSNode node : nodes.values()){
+            ECSNode escNode = (ECSNode) node;
+            escNode.kvServer.clearStorage();
+            escNode.kvServer.close();
+        }
+        return true;
     }
 
     @Override
     public boolean shutdown() {
         // TODO
         return false;
+    }
+
+    public ECSMessage SendMessage(ECSNode node, ECSMessage message){
+        KVStore kvStore = new KVStore(node.getNodeHost(), node.getNodePort());
+        try {
+            kvStore.connect();
+            String receivedMessage = kvStore.sendMessage(serializeToString(message));
+            kvStore.disconnect();
+            return deserializeFromString(receivedMessage);
+        }
+        catch (Exception ex) {
+            kvStore.disconnect();
+            System.out.println(ex.getMessage());
+        }
+        return null;
     }
 
     @Override
@@ -45,6 +78,7 @@ public class ECSClient implements IECSClient {
         String hashCode = getHash(address + ":" + port);
         String[] hashRange = {getStartNodeHash(hashCode), hashCode};
         ECSNode ecsNode = new ECSNode(port + "", address,port,hashRange, cacheSize, dBStoragePath, cacheStrategy);
+        ecsNode.startServer();
         nodes.put(hashCode, ecsNode);
         if (nodes.size() > 1) {
             transferDataForNewNode(hashCode, getSuccessor(hashCode));
@@ -289,10 +323,6 @@ public class ECSClient implements IECSClient {
         return null;
     }
 
-    public static void main(String[] args) {
-        // TODO
-    }
-
     public String getHash(String key){
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
@@ -314,5 +344,129 @@ public class ECSClient implements IECSClient {
             hexString.append(hex);
         }
         return hexString.toString();
+    }
+
+    static String serializeToString(Object obj) {
+        try {
+            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+            ObjectOutputStream objectOutputStream = new ObjectOutputStream(byteArrayOutputStream);
+            objectOutputStream.writeObject(obj);
+            objectOutputStream.close();
+            return Base64.getEncoder().encodeToString(byteArrayOutputStream.toByteArray());
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    static ECSMessage deserializeFromString(String serializedString) {
+        try {
+            byte[] data = Base64.getDecoder().decode(serializedString);
+            ObjectInputStream objectInputStream = new ObjectInputStream(new ByteArrayInputStream(data));
+            return (ECSMessage) objectInputStream.readObject();
+        } catch (IOException | ClassNotFoundException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    private static String generateHelpString() {
+        return "Usage: java KVServer [-p <port>] [-a <address>] [-d <directory>] [-l <logFile>] [-ll <logLevel>] [-c <cacheSize>] [-cs <cacheStrategy>]\n"
+                + "Options:\n"
+                + "  -p <port>          Port number for the KVServer (default: 5000)\n"
+                + "  -a <address>       Address for the KVServer (default: localhost)\n"
+                + "  -d <directory>     Directory for storage (default: current directory)\n"
+                + "  -l <logFile>       File path for the log file (default: ./server.log)\n"
+                + "  -ll <logLevel>     Log level for the server (default: ALL)\n"
+                + "  -c <cacheSize>     Size of the cache (default: 10)\n"
+                + "  -cs <cacheStrategy> Cache replacement strategy (default: None)\n\n"
+                + "Example:\n"
+                + "  java KVServer -p 8080 -a 127.0.0.1 -d /path/to/data -l /path/to/server.log -ll INFO -c 50 -cs LRU";
+    }
+    public static void main(String[] args) {
+
+        String helpString = generateHelpString();
+
+        // Default Values
+        int port = 5000;
+        String address = "localhost";
+        String directory = System.getProperty("user.dir");
+        String logFile = System.getProperty("user.dir") + "/server.log";
+        Level Level;
+        Level logLevel = org.apache.log4j.Level.ALL;
+        IKVServer.CacheStrategy strategy = IKVServer.CacheStrategy.None;
+        int cacheSize = 10;
+
+        if (args.length > 0 && args[0].equals("-h")) {
+            System.out.println(helpString);
+            System.exit(1);
+        }
+
+        if (args.length % 2 != 0) {
+            System.out.println("Invalid number of arguments");
+            System.out.println(helpString);
+            System.exit(1);
+        }
+
+        try {
+            for (int i = 0; i < args.length; i += 2) {
+                switch (args[i]) {
+                    case "-p":
+                        port = Integer.parseInt(args[i + 1]);
+                        break;
+                    case "-a":
+                        address = args[i + 1];
+                        break;
+                    case "-d":
+                        directory = args[i + 1];
+                        break;
+                    case "-l":
+                        logFile = args[i + 1];
+                        break;
+                    case "-ll":
+                        if (LogSetup.isValidLevel(args[i + 1]))
+                            logLevel = org.apache.log4j.Level.toLevel(args[i + 1]);
+                        else {
+                            System.out.println("Invalid log level: " + args[i + 1]);
+                            System.out.println(helpString);
+                            System.exit(1);
+                        }
+                        break;
+                    case "-c":
+                        cacheSize = Integer.parseInt(args[i + 1]);
+                        break;
+                    case "-cs":
+                        strategy = IKVServer.CacheStrategy.valueOf(args[i + 1]);
+                        break;
+                    default:
+                        System.out.println("Invalid argument: " + args[i]);
+                        System.out.println(helpString);
+                        System.exit(1);
+                }
+            }
+        } catch (NumberFormatException nfe) {
+            System.out.println("Error! Invalid argument -p! Not a number!");
+            System.out.println(helpString);
+            System.exit(1);
+        } catch (IllegalArgumentException iae) {
+            System.out.println("Error! Invalid argument -cs! Not a valid cache strategy!");
+            System.out.println(helpString);
+            System.exit(1);
+        } catch (Exception e) {
+            System.out.println("Unexpected error:\n" + e.getMessage());
+            System.out.println(helpString);
+            System.exit(1);
+        }
+
+        try {
+            new LogSetup(logFile, logLevel);
+            new KVServer(port, cacheSize, strategy.toString(), address, directory);
+        } catch (IOException e) {
+            System.out.println("Error! Unable to initialize logger!");
+            System.exit(1);
+        } catch (Exception e) {
+            System.out.println("Unexpected error:\n" + e.getMessage());
+            System.exit(1);
+        }
     }
 }

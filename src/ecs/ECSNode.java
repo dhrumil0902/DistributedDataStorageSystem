@@ -30,7 +30,7 @@ public class ECSNode implements IECSNode {
     }
 
     public String getNodeHost(){
-        return null;
+        return this.nodeHost;
     }
 
     public int getNodePort(){

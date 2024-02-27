@@ -1,137 +1,182 @@
 package app_kvServer;
 
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.net.Socket;
-
+import app_kvECS.ECSClient;
+import app_kvECS.ECSMessage;
 import org.apache.log4j.*;
+import shared.messages.KVMessage;
 
-import java.util.HashSet;
-import java.util.Set;
+import java.io.BufferedInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.net.Socket;
+import java.nio.charset.StandardCharsets;
+import java.util.zip.*;
+import java.io.*;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
+
+public class ClientConnection implements Runnable{
+
+    private static final Logger logger = Logger.getRootLogger();
+    private final Socket clientSocket;
+    private final KVServer kvServer;
+    private ObjectInputStream input;
+    private ObjectOutputStream output;
+    private boolean isOpen;
+
+    public ClientConnection(Socket clientSocket, KVServer server) {
+        this.clientSocket = clientSocket;
+        this.kvServer = server;
+        this.isOpen = true;
+    }
+
+    @Override
+    public void run() {
+        try {
+            input = new ObjectInputStream(clientSocket.getInputStream());
+            output = new ObjectOutputStream(clientSocket.getOutputStream());
+            while (isOpen) {
+                receiveMessage();
+            }
+        } catch (IOException e) {
+            logger.error("Error! Connection could not be established!", e);
+        } finally {
+            try {
+                if (clientSocket != null) {
+                    input.close();
+                    output.close();
+                    clientSocket.close();
+                }
+            } catch (IOException e) {
+                logger.error("Error! Unable to tear down connection!", e);
+            }
+        }
+    }
+
+    private void receiveMessage() {
+        try {
+            Object obj = input.readObject();
+
+            if (obj instanceof ECSMessage) {
+                ECSMessage message = (ECSMessage) obj;
+                handleECSMessage(message);
+            } else if (obj instanceof KVMessage) {
+                KVMessage message = (KVMessage) obj;
+                handleKVMessage(message);
+            } else {
+                logger.error("Received an unknown message type.");
+            }
+        } catch (EOFException e) {
+            logger.info("Client has closed the connection.");
+            isOpen = false;
+        } catch (IOException | ClassNotFoundException e) {
+            logger.error("Error during message reception and deserialization.", e);
+        }
+    }
+
+    private void handleECSMessage(ECSMessage msg) throws IOException {
+        if (msg == null) {
+            isOpen = false;
+            return;
+        }
+        ECSMessage response = new ECSMessage();
+        switch (msg.getAction()) {
+            case SET_WRITE_LOCK:
+                break;
+            case APPEND:
+                kvServer.appendDataToStorage(msg.getData());
+                response.setAction(msg.getAction());
+                response.setSuccess(true);
+                break;
+            case GET_ALL:
+                response.setData(kvServer.getAllData());
+                response.setSuccess(true);
+                break;
+            default:
+                logger.error("Unknown identified message from kvServer: " + msg);
+        }
+        sendMessage(response);
+    }
+
+    private void handleKVMessage (KVMessage msg) {
+
+    }
+
+    private void sendMessage(ECSMessage responseMessage) throws IOException {
+        output.writeObject(responseMessage);
+        output.flush();
+    }
+
+    public void close() throws IOException{
+        if (isOpen) {
+            isOpen = false;
+//            sendMessage("DISCONNECT");
+        }
+    }
+
+    public void transferData(String address, int port) {
+        kvServer.syncCacheToStorage();
+        String filePath = kvServer.getStoragePath();
+
+        try (Socket socket = new Socket(address, port);
+             FileInputStream fis = new FileInputStream(filePath);
+             BufferedInputStream bis = new BufferedInputStream(fis);
+             OutputStream out = socket.getOutputStream();
+             ZipOutputStream zos = new ZipOutputStream(out);
+             InputStream in = socket.getInputStream();
+             BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
+
+            // Send initiation message
+            out.write(("BEGIN_TRANSFER\n").getBytes(StandardCharsets.UTF_8));
+            out.flush();
+
+            // Compress and send data
+            ZipEntry zipEntry = new ZipEntry(new File(filePath).getName());
+            zos.putNextEntry(zipEntry);
+            byte[] buffer = new byte[1024];
+            int count;
+            while ((count = bis.read(buffer)) > 0) {
+                zos.write(buffer, 0, count);
+            }
+            zos.closeEntry();
+            zos.finish();
+
+            // Wait for confirmation
+            String msg = reader.readLine();
+            if ("DATA_RECEIVED".equals(msg)) {
+                logger.info(String.format("Successfully transferred data to SERVER %s:%d", address, port));
+            } else {
+                logger.error(String.format("Failed to transfer data to SERVER %s:%d", address, port));
+            }
+        } catch (IOException e) {
+            logger.error(String.format("Failed to transfer data to SERVER %s:%d", address, port), e);
+        }
+    }
 
 
-/**
- * Represents a connection end point for a particular client that is
- * connected to the server. This class is responsible for message reception
- * and sending.
- * The class also implements the echo functionality. Thus whenever a message
- * is received it is going to be echoed back to the client.
- */
-public class ClientConnection implements Runnable {
+    private void receiveData() {
+        try (InputStream in = clientSocket.getInputStream();
+             ZipInputStream zis = new ZipInputStream(in)) {
 
-	private static Logger logger = Logger.getRootLogger();
+            ZipEntry zipEntry = zis.getNextEntry();
+            if (zipEntry != null) {
+                String filePath = kvServer.getStoragePath();
+                try (FileOutputStream fos = new FileOutputStream(filePath);
+                     BufferedOutputStream bos = new BufferedOutputStream(fos)) {
 
-	private boolean isOpen;
-
-	private Socket clientSocket;
-	private BufferedReader input;
-	private BufferedWriter output;
-	private ServerConnectionListener connectionListener;
-
-
-	/**
-	 * Constructs a new CientConnection object for a given TCP socket.
-	 * @param clientSocket the Socket object for the client connection.
-	 */
-	public ClientConnection(Socket clientSocket, ServerConnectionListener connectionListener){
-		this.clientSocket = clientSocket;
-		this.isOpen = true;
-		this.connectionListener = connectionListener;
-	}
-
-	/**
-	 * Initializes and starts the client connection.
-	 * Loops until the connection is closed or aborted by the client.
-	 */
-	public void run() {
-		try {
-			output = new BufferedWriter(new OutputStreamWriter(clientSocket.getOutputStream(), "UTF-8"));
-			input = new BufferedReader(new InputStreamReader(clientSocket.getInputStream(), "UTF-8"));
-
-			sendMessage(
-					"Connection to MSRG Echo server established: "
-							+ clientSocket.getLocalAddress() + " / "
-							+ clientSocket.getLocalPort());
-
-			while(isOpen) {
-				try {
-					String latestMsg = receiveMessage();
-					if (connectionListener != null) {
-						sendMessage(connectionListener.onMessageReceived(latestMsg));
-					}
-					else{
-						logger.error("SERVER: Unexpected error, connectionlistener is null");
-						sendMessage("ERROR");
-					}
-
-					/* connection either terminated by the client or lost due to
-					 * network problems*/
-				} catch (IOException ioe) {
-					logger.error("Error! Connection lost!");
-					isOpen = false;
-				}
-			}
-
-		} catch (IOException ioe) {
-			logger.error("Error! Connection could not be established!", ioe);
-
-		} finally {
-
-			try {
-				if (clientSocket != null) {
-					input.close();
-					output.close();
-					clientSocket.close();
-				}
-			} catch (IOException ioe) {
-				logger.error("Error! Unable to tear down connection!", ioe);
-			}
-		}
-	}
-
-	/**
-	 * Method sends a msg using this socket.
-	 * @param msg the message that is to be sent.
-	 * @throws IOException some I/O error regarding the output stream
-	 */
-	public void sendMessage(String msg) throws IOException {
-		output.write(msg + "\n");
-		output.flush();
-		logger.info("SEND \t<"
-				+ clientSocket.getInetAddress().getHostAddress() + ":"
-				+ clientSocket.getPort() + ">: '"
-				+ msg +"'");
-	}
+                    byte[] buffer = new byte[1024];
+                    int len;
+                    while ((len = zis.read(buffer)) > 0) {
+                        bos.write(buffer, 0, len);
+                    }
+                }
+                zis.closeEntry();
+            }
+            System.out.println("File received and decompressed successfully.");
+        } catch (IOException e) {
+            System.err.println("Error processing a client connection: " + e.getMessage());
+        }
+    }
 
 
-	private String receiveMessage() throws IOException {
-		String msg = input.readLine();
-
-		if (msg == null) {
-			isOpen = false;
-			throw new IOException("Client has shut down unexpectedly");
-		} else if (msg.equals("DISCONNECT")) {
-			isOpen = false;
-			logger.info("Connection terminated by client");
-			throw new IOException("Connection terminated by client");
-		}
-
-		logger.info("RECEIVE \t<"
-				+ clientSocket.getInetAddress().getHostAddress() + ":"
-				+ clientSocket.getPort() + ">: '"
-				+ msg + "'");
-		return msg;
-	}
-
-	public void close() throws IOException{
-		if (isOpen) {
-			isOpen = false;
-			sendMessage("DISCONNECT");
-		}
-	}
 }

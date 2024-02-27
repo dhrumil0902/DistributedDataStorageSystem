@@ -1,8 +1,8 @@
 package ecs;
-import app_kvServer.KVServer;
 
-public class ECSNode implements IECSNode {
-    public KVServer kvServer;
+import java.io.Serializable;
+
+public class ECSNode implements IECSNode, Serializable {
     private String nodeName;
     private String nodeHost;
     private int nodePort;
@@ -30,7 +30,6 @@ public class ECSNode implements IECSNode {
     }
 
     public void startServer() {
-        kvServer = new KVServer(nodePort, 0, cacheSize, strategy, nodeHost, dBStoragePath);
     }
     public String getNodeName(){
         return this.nodeName;

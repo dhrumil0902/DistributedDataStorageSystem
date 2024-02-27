@@ -9,17 +9,16 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import app_kvECS.KVStore;
 
+import app_kvECS.ECSMessage.ActionType;
+import app_kvECS.ServerConnection;
 import ecs.ECSNode;
 import ecs.IECSNode;
 import logger.LogSetup;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
-public class ECSClient implements IECSClient, ServerConnectionListener, Runnable, Serializable {
+public class ECSClient implements IECSClient, Runnable, Serializable {
 
     public BST nodes;
     private static Logger logger = Logger.getRootLogger();
@@ -27,7 +26,7 @@ public class ECSClient implements IECSClient, ServerConnectionListener, Runnable
     private ServerSocket serverSocket;
     private boolean running;
     private String address;
-    private List<ClientConnection> clientConnections = new ArrayList<ClientConnection>();
+    private List<ServerConnection> clientConnections = new ArrayList<ServerConnection>();
     UniqueRandomNumberGenerator randomNumberGen = new UniqueRandomNumberGenerator();
 
     public ECSClient(String address, int port) {
@@ -45,7 +44,7 @@ public class ECSClient implements IECSClient, ServerConnectionListener, Runnable
             while (isRunning()) {
                 try {
                     Socket client = serverSocket.accept();
-                    ClientConnection connection = new ClientConnection(client, this);
+                    ServerConnection connection = new ServerConnection(client, this);
                     clientConnections.add(connection);
                     new Thread(connection).start();
 
@@ -367,14 +366,6 @@ public class ECSClient implements IECSClient, ServerConnectionListener, Runnable
         return null;
     }
 
-    public static void main(String[] args) throws IOException {
-        new LogSetup("test2.log", Level.ALL);
-        new ECSClient("127.0.0.1", 5100);
-        while(true){
-
-        }
-    }
-
     public String getHash(String key){
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
@@ -398,25 +389,41 @@ public class ECSClient implements IECSClient, ServerConnectionListener, Runnable
         return hexString.toString();
     }
 
-    @Override
-    public String onMessageReceived(String message, int port, String address) {
-        if (message.compareTo("New Node") ==0) {
-            String hashCode = getHash(address + ":" + port);
-            String[] hashRange = {getStartNodeHash(hashCode), hashCode};
-            ECSNode ecsNode = new ECSNode(address + port, address,port,hashRange);
-            nodes.put(hashCode, ecsNode);
-            List<String> kvToTransfer = new ArrayList<String>();
-            if (nodes.size() > 1) {
-                kvToTransfer = getKVPairsToTransfer(hashCode, getSuccessor(hashCode));
-                ECSNode successor = (ECSNode) nodes.get(getSuccessor(hashCode));
-                successor.getNodeHashRange()[0] = hashCode;
-                logger.info(nodes.print());
-                return serializeToString(new ECSMessage(ActionType.APPEND, true, kvToTransfer,null, nodes.bst.values()));
-            }
-            logger.info("Added new node to the bst, current state of bst: " + nodes.print());
-            return serializeToString(new ECSMessage(ActionType.APPEND, true,kvToTransfer,null, nodes.bst.values()));
-        }
-        return serializeToString(new ECSMessage(ActionType.UPDATE_METADATA, true,null,null, nodes.bst.values()));
+//    @Override
+//    public String onMessageReceived(String message, int port, String address) {
+//        if (message.compareTo("New Node") ==0) {
+//            String hashCode = getHash(address + ":" + port);
+//            String[] hashRange = {getStartNodeHash(hashCode), hashCode};
+//            ECSNode ecsNode = new ECSNode(address + port, address,port,hashRange);
+//            nodes.put(hashCode, ecsNode);
+//            List<String> kvToTransfer = new ArrayList<String>();
+//            if (nodes.size() > 1) {
+//                kvToTransfer = getKVPairsToTransfer(hashCode, getSuccessor(hashCode));
+//                ECSNode successor = (ECSNode) nodes.get(getSuccessor(hashCode));
+//                successor.getNodeHashRange()[0] = hashCode;
+//                logger.info(nodes.print());
+//                return serializeToString(new ECSMessage(ActionType.APPEND, true, kvToTransfer,null, null));
+//            }
+//            logger.info("Added new node to the bst, current state of bst: " + nodes.print());
+//            return serializeToString(new ECSMessage(ActionType.APPEND, true,kvToTransfer,null, null));
+//        }
+//        return serializeToString(new ECSMessage(ActionType.UPDATE_METADATA, true,null,null, null));
+//    }
+
+    public BST addNode(int port, String address) {
+        String hashCode = getHash(address + ":" + port);
+        String[] hashRange = {getStartNodeHash(hashCode), hashCode};
+        ECSNode ecsNode = new ECSNode(address + port, address,port,hashRange);
+        nodes.put(hashCode, ecsNode);
+        List<String> kvToTransfer = new ArrayList<String>();
+//        if (nodes.size() > 1) {
+//            kvToTransfer = getKVPairsToTransfer(hashCode, getSuccessor(hashCode));
+//            ECSNode successor = (ECSNode) nodes.get(getSuccessor(hashCode));
+//            successor.getNodeHashRange()[0] = hashCode;
+//            logger.info(nodes.print());
+//        }
+        logger.info("Added new node to the bst, current state of bst: " + nodes.print());
+        return nodes;
     }
 
     private List<String> addConnectedNewNode(int port, String address) {
@@ -424,36 +431,37 @@ public class ECSClient implements IECSClient, ServerConnectionListener, Runnable
         String[] hashRange = {getStartNodeHash(hashCode), hashCode};
         ECSNode ecsNode = new ECSNode(address + port, address,port,hashRange);
         nodes.put(hashCode, ecsNode);
-        if (nodes.size() > 1) {
-            List<String> kvToTransfer = getKVPairsToTransfer(hashCode, getSuccessor(hashCode));
-            ECSNode successor = (ECSNode) nodes.get(getSuccessor(hashCode));
-            successor.getNodeHashRange()[0] = hashCode;
-            return kvToTransfer;
-
-        }
+//        if (nodes.size() > 1) {
+//            List<String> kvToTransfer = getKVPairsToTransfer(hashCode, getSuccessor(hashCode));
+//            ECSNode successor = (ECSNode) nodes.get(getSuccessor(hashCode));
+//            successor.getNodeHashRange()[0] = hashCode;
+//            return kvToTransfer;
+//
+//        }
         return null;
     }
-    private List<String> getKVPairsToTransfer(String newNode, String successor) {
-        String minRange = getPredecessor(newNode); // Minimum value of the range
-        String maxRange = newNode; // Maximum value of the range
-
-        List<String> lines;
-        List<String> linesToTransfer = new ArrayList<String>();
-        List<String> linesToKeep = new ArrayList<String>();
-        try {
-            ECSNode ecsNodeSuccessor = (ECSNode) nodes.get(successor);
-            ECSNode ecsNewNode = (ECSNode) nodes.get(newNode);
-            ECSMessage ecsMessage = sendMessage(ecsNodeSuccessor, new ECSMessage(ActionType.REMOVE, false, null, new String[]{minRange, maxRange}, nodes.bst.values()));
-            if (ecsMessage.success) {
-                return ecsMessage.data;
-            }
-            return null;
-        }
-        catch (Exception ex){
-            logger.error(ex);
-        }
-        return null;
-    }
+//    private List<String> getKVPairsToTransfer(String newNode, String successor) {
+//        String minRange = getPredecessor(newNode); // Minimum value of the range
+//        String maxRange = newNode; // Maximum value of the range
+//
+//        List<String> lines;
+//        List<String> linesToTransfer = new ArrayList<String>();
+//        List<String> linesToKeep = new ArrayList<String>();
+//        try {
+//            ECSNode ecsNodeSuccessor = (ECSNode) nodes.get(successor);
+//            ECSNode ecsNewNode = (ECSNode) nodes.get(newNode);
+//            ECSMessage ecsMessage = sendMessage(ecsNodeSuccessor, new ECSMessage(ActionType.REMOVE, false,
+//                    null, new String[]{minRange, maxRange}, nodes.bst.values()));
+//            if (ecsMessage.success) {
+//                return ecsMessage.data;
+//            }
+//            return null;
+//        }
+//        catch (Exception ex){
+//            logger.error(ex);
+//        }
+//        return null;
+//    }
 
 public ECSMessage sendMessage(ECSNode node, ECSMessage message) throws Exception {
         KVStore kvStore = new KVStore(node.getNodeHost(), node.getNodePort());
@@ -462,10 +470,10 @@ public ECSMessage sendMessage(ECSNode node, ECSMessage message) throws Exception
         kvStore.disconnect();
         return deserializeFromString(recievedString);
 }
-    @Override
-    public void onConnectionClosed() {
-
-    }
+//    @Override
+//    public void onConnectionClosed() {
+//
+//    }
     static ECSMessage deserializeFromString(String serializedString) {
         try {
             byte[] data = Base64.getDecoder().decode(serializedString);
@@ -488,6 +496,11 @@ public ECSMessage sendMessage(ECSNode node, ECSMessage message) throws Exception
             e.printStackTrace();
             return null;
         }
+    }
+
+    public static void main(String[] args) throws IOException {
+        new LogSetup("test2.log", Level.ALL);
+        new ECSClient("127.0.0.1", 5100);
     }
 
 }

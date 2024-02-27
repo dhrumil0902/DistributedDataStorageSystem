@@ -1,6 +1,8 @@
 package app_kvServer;
 
 import java.io.File;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.net.BindException;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -10,6 +12,8 @@ import java.util.List;
 import java.util.AbstractMap.SimpleEntry;
 import java.io.IOException;
 
+import app_kvECS.BST;
+import app_kvECS.ECSMessage;
 import app_kvServer.kvCache.FIFOCache;
 import app_kvServer.kvCache.IKVCache;
 import app_kvServer.kvCache.LFUCache;
@@ -22,10 +26,10 @@ import java.net.InetSocketAddress;
 
 
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
-public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
+import static app_kvECS.ECSMessage.ActionType;
+
+public class KVServer implements IKVServer, Runnable {
     /**
      * Start KV Server at given port
      *
@@ -38,29 +42,33 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
      * and "LFU".
      */
     private static Logger logger = Logger.getRootLogger();
+    private String address;
+    private int port;
+    private String ecsAddress;
+    private int ecsPort;
     int cacheSize;
     CacheStrategy strategy;
-    private int clientPort;
-    private int serverPort;
-    private ServerSocket clientServerSocket;
-    private ServerSocket serverServerSocket;
+    private ServerSocket serverSocket;
     private boolean running;
-    private String address;
+    private boolean register;
     private String storagePath;
     private IKVCache cache;
     private KVStorage storage;
     private final Object lock = new Object();
-    private ExecutorService threadPool;
+    private BST metadata;
 
     private List<ClientConnection> clientConnections = new ArrayList<ClientConnection>();
 
-    public KVServer(int port, int cacheSize, String strategy) {
-        this(port, cacheSize, strategy, "localhost", System.getProperty("user.dir"));
-    }
+//    public KVServer(int port, int cacheSize, String strategy) {
+//        this(port, cacheSize, strategy, "localhost", System.getProperty("user.dir"));
+//    }
 
-    public KVServer(int port, int cacheSize, String strategy, String address, String storageDir) {
+    public KVServer(String ecsAddress, int ecsPort, String address, int port, int cacheSize, String strategy,
+                    String storageDir) {
         String fileName = address + "_" + port + ".txt";
         this.storagePath = storageDir + File.separator + fileName;
+        this.ecsAddress = ecsAddress;
+        this.ecsPort = ecsPort;
         this.address = address;
         this.port = port;
         this.cacheSize = cacheSize;
@@ -84,7 +92,7 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
                 this.cache = new FIFOCache(0);
                 break;
         }
-        this.storage = new KVStorage(directoryDB);
+        this.storage = new KVStorage(this.storagePath);
         startServer();
     }
 
@@ -284,63 +292,23 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
     @Override
     public void run() {
         running = initializeServer();
-        threadPool = Executors.newCachedThreadPool();
-
-        if (clientServerSocket != null) {
-            threadPool.execute(new ClientListener(clientServerSocket, this));
-        }
-
-        if (serverServerSocket != null) {
-            threadPool.execute(new ServerListener(serverServerSocket, this));
-        }
-    }
-
-    private class ClientListener implements Runnable {
-        private final ServerSocket serverSocket;
-        private final KVServer server;
-
-        public ClientListener(ServerSocket serverSocket, KVServer server) {
-            this.serverSocket = serverSocket;
-            this.server = server;
-        }
-
-        public void run() {
+        new Thread(this::connectToCentralServer).start();
+        if (serverSocket != null) {
             while (isRunning()) {
                 try {
-                    Socket clientSocket = serverSocket.accept();
-                    ClientConnection connection = new ClientConnection(clientSocket, server);
-                    threadPool.execute(connection);
+                    Socket client = serverSocket.accept();
+                    ClientConnection connection = new ClientConnection(client, this);
+                    clientConnections.add(connection);
+                    new Thread(connection).start();
 
-                    logger.info("Connected to client at " + clientSocket.getInetAddress().getHostName() + " on port " + client.getPort());
+                    logger.info(
+                            "From Server: Connected to " + client.getInetAddress().getHostName() + " on port " + client.getPort());
                 } catch (IOException e) {
-                    logger.error("Error accepting client connection", e);
+                    logger.error("Error! Unable to establish connection. \n", e);
                 }
             }
         }
-    }
-
-    private class ServerListener implements Runnable {
-        private final ServerSocket serverSocket;
-        private final KVServer server;
-
-        public ServerListener(ServerSocket serverSocket, KVServer server) {
-            this.serverSocket = serverSocket;
-            this.server = server;
-        }
-
-        public void run() {
-            while (isRunning()) {
-                try {
-                    Socket serverSocket = serverSocket.accept();
-                    ServerConnection connection = new ServerConnection(server, server);
-                    threadPool.execute(connection);
-
-                    logger.info("Connected to server at " + server.getInetAddress().getHostName() + " on port " + server.getPort());
-                } catch (IOException e) {
-                    logger.error("Error accepting server connection", e);
-                }
-            }
-        }
+        logger.info("Server stopped.");
     }
 
     @Override
@@ -369,35 +337,21 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
             logger.error("Error! " +
                     "Unable to close socket on port: " + port, e);
         }
-        threadPool.shutdownNow();
     }
 
     private boolean initializeServer() {
         logger.info("Initialize server ...");
         try {
-            InetSocketAddress clientSocketAddress = new InetSocketAddress(address, clientPort);
-            clientServerSocket = new ServerSocket();
-            clientServerSocket.bind(clientSocketAddress);
-            logger.info("Client Socket listening on " + address + ":" + clientPort);
-        } catch (BindException e) {
-            logger.error("Error! Client port " + clientPort + " is already bound!", e);
-            return false;
-        } catch (IOException e) {
-            logger.error("Error! Cannot open client server socket due to an I/O error.", e);
-            return false;
-        }
-
-        try {
-            InetSocketAddress serverSocketAddress = new InetSocketAddress(address, serverPort);
-            serverServerSocket = new ServerSocket();
-            serverServerSocket.bind(serverSocketAddress);
-            logger.info("Server Socket listening on " + address + ":" + serverPort);
+            InetSocketAddress socketAddress = new InetSocketAddress(address, port);
+            serverSocket = new ServerSocket();
+            serverSocket.bind(socketAddress);
+            logger.info("Server listening on port: " + serverSocket.getLocalPort());
             return true;
-        } catch (BindException e) {
-            logger.error("Error! Server port " + serverPort + " is already bound!", e);
-            return false;
         } catch (IOException e) {
-            logger.error("Error! Cannot open server server socket due to an I/O error.", e);
+            logger.error("Error! Cannot open server socket:");
+            if (e instanceof BindException) {
+                logger.error("Port " + port + " is already bound!");
+            }
             return false;
         }
     }
@@ -406,7 +360,44 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
         return this.running;
     }
 
-    @Override
+    private void connectToCentralServer() {
+//        if (ECSAddress.isEmpty() || ecsPort == -1) {
+//            return;
+//        }
+        try (Socket ECSSocket = new Socket(ecsAddress, ecsPort)) {
+            // Setup input and output streams
+            ObjectOutputStream out = new ObjectOutputStream(ECSSocket.getOutputStream());
+            ObjectInputStream in = new ObjectInputStream(ECSSocket.getInputStream());
+            ECSMessage msg = new ECSMessage();
+            msg.setAction(ActionType.NEW_NODE);
+            msg.setServerInfo(address, port);
+            out.writeObject(msg);
+            out.flush();
+
+            // Wait for a response from the central server
+            Object obj = in.readObject();
+            if (obj instanceof ECSMessage) {
+                ECSMessage response = (ECSMessage) obj;
+                if (response.getSuccess()) {
+                    // Registration successful, update server state or metadata as needed
+                    logger.info("Successfully connected to the ECS server.");
+                    register = true;
+                    metadata = response.getNodes();
+                    logger.info("Metadata: " + metadata.print());
+                } else {
+                    logger.error("Failed to register with the ECS server.");
+                }
+            } else {
+                // Unexpected response type
+                logger.error("Received an unexpected response type from the ECS server.");
+            }
+        } catch (IOException | ClassNotFoundException e) {
+            logger.error("Failed to connect to the central server.", e);
+        }
+    }
+
+
+//    @Override
     public String onMessageReceived(String message) {
         if (message == null || message.isEmpty()) {
             logger.error("SERVER: Received empty or null message from client.");
@@ -513,11 +504,11 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
         }
     }
 
-    @Override
-    public void onConnectionClosed() {
-
-        logger.info("Connection closed by client.");
-    }
+//    @Override
+//    public void onConnectionClosed() {
+//
+//        logger.info("Connection closed by client.");
+//    }
 
     public void setAddress(String address) {
         this.address = address;
@@ -526,6 +517,7 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
     private static String generateHelpString() {
         return "Usage: java KVServer [-p <port>] [-a <address>] [-d <directory>] [-l <logFile>] [-ll <logLevel>] [-c <cacheSize>] [-cs <cacheStrategy>]\n"
                 + "Options:\n"
+                + "  -b <address:port>  Address and port number of the ECS server (default: localhost:5001)\n"    
                 + "  -p <port>          Port number for the KVServer (default: 5000)\n"
                 + "  -a <address>       Address for the KVServer (default: localhost)\n"
                 + "  -d <directory>     Directory for storage (default: current directory)\n"
@@ -544,6 +536,8 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
         // Default Values
         int port = 5000;
         String address = "localhost";
+        int ecsPort = 5100;
+        String ecsAddress = "localhost";
         String directory = System.getProperty("user.dir");
         String logFile = System.getProperty("user.dir") + "/server.log";
         Level logLevel = Level.ALL;
@@ -555,15 +549,20 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
             System.exit(1);
         }
 
-        if (args.length % 2 != 0) {
-            System.out.println("Invalid number of arguments");
-            System.out.println(helpString);
-            System.exit(1);
-        }
+//        if (args.length % 2 != 0) {
+//            System.out.println("Invalid number of arguments");
+//            System.out.println(helpString);
+//            System.exit(1);
+//        }
 
         try {
             for (int i = 0; i < args.length; i += 2) {
                 switch (args[i]) {
+                    case "-b":
+                        String[] pair = args[i + 1].split(":");
+                        ecsAddress = pair[0];
+                        ecsPort = Integer.parseInt(pair[1]);
+                        break;
                     case "-p":
                         port = Integer.parseInt(args[i + 1]);
                         break;
@@ -613,7 +612,7 @@ public class KVServer implements IKVServer, ServerConnectionListener, Runnable {
 
         try {
             new LogSetup(logFile, logLevel);
-            final KVServer server = new KVServer(port, cacheSize, strategy.toString(), address, directory);
+            final KVServer server = new KVServer(ecsAddress, ecsPort, address, port, cacheSize, strategy.toString(), directory);
             Runtime.getRuntime().addShutdownHook(new Thread() {
                 public void run() {
                     server.close();

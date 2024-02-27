@@ -9,7 +9,7 @@ import java.io.*;
 
 
 public class BST implements Serializable {
-    public TreeMap<String, IECSNode> bst;
+    public TreeMap<String, ECSNode> bst;
 
     public BST() {
         bst = new TreeMap<>();
@@ -83,12 +83,12 @@ public class BST implements Serializable {
         return bst.navigableKeySet();
     }
 
-    public Collection<IECSNode> values() {
+    public Collection<ECSNode> values() {
         return bst.values();
     }
     public String print() {
         StringBuilder sb = new StringBuilder();
-        for (Map.Entry<String, IECSNode> entry : bst.entrySet()) {
+        for (Map.Entry<String, ECSNode> entry : bst.entrySet()) {
             sb.append("Key: ").append(entry.getKey())
                     .append(", Range: ").append(Arrays.toString(entry.getValue().getNodeHashRange()))
                     .append(", NodeName: ").append(entry.getValue().getNodeName())

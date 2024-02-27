@@ -5,6 +5,7 @@ import java.util.*;
 public class ECSMessage implements Serializable {
 
     public enum ActionType {
+        NEW_NODE,
         DELETE, //stop the server (keeps running but returns SERVER_STOPPED to client) returns (success = true)
         SET_WRITE_LOCK, // sets write lock, returns success = true
         UNSET_WRITE_LOCK, //unset write lock, return sucess = true
@@ -16,6 +17,7 @@ public class ECSMessage implements Serializable {
     }
 
     private ActionType action;
+    private String[] serverInfo;
     public boolean success = false;
     public List<String> data;
 
@@ -27,7 +29,8 @@ public class ECSMessage implements Serializable {
         this.action = null;
         this.success = false;
         this.data = new ArrayList<>();
-        this.range = new String[0];
+        this.range = null;
+        this.serverInfo = null;
         this.nodes = null;
     }
 
@@ -55,53 +58,19 @@ public class ECSMessage implements Serializable {
         this.data = data;
     }
 
+    public boolean getSuccess() {return this.success;}
+
     public void setSuccess(Boolean status) {
         this.success = status;
     }
-}
 
-class Main {
-    public static void main(String[] args) {
-        // Example data - JUST FOR TESTING PURPOSES
-        ActionType action = ActionType.SET_WRITE_LOCK;
-        boolean success = true;
-        List<String> dataList = Arrays.asList("data1", "data2", "data3");
+    public String[] getServerInfo() {return this.serverInfo;}
 
-        ECSMessage ecsMessage = new ECSMessage(action, success, dataList, null, null);
-
-        String serializedString = serializeToString(ecsMessage);
-        System.out.println("Serialized String: " + serializedString);
-
-        // Deserialize string
-        ECSMessage deserializedMessage = deserializeFromString(serializedString);
-        System.out.println("Action: " + deserializedMessage.getAction() + ", Success: " + deserializedMessage.success);
-
-        for (String item : deserializedMessage.data) {
-            System.out.println("Data: " + item);
-        }
+    public void setServerInfo(String address, int port) {
+        this.serverInfo = new String[]{address, String.valueOf(port)};
     }
 
-     static String serializeToString(Object obj) {
-        try {
-            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-            ObjectOutputStream objectOutputStream = new ObjectOutputStream(byteArrayOutputStream);
-            objectOutputStream.writeObject(obj);
-            objectOutputStream.close();
-            return Base64.getEncoder().encodeToString(byteArrayOutputStream.toByteArray());
-        } catch (IOException e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
+    public BST getNodes() {return this.nodes;}
 
-     static ECSMessage deserializeFromString(String serializedString) {
-        try {
-            byte[] data = Base64.getDecoder().decode(serializedString);
-            ObjectInputStream objectInputStream = new ObjectInputStream(new ByteArrayInputStream(data));
-            return (ECSMessage) objectInputStream.readObject();
-        } catch (IOException | ClassNotFoundException e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
+    public void setNodes(BST nodes) {this.nodes = nodes;}
 }

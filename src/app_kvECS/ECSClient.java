@@ -1,73 +1,115 @@
 package app_kvECS;
-import java.io.BufferedWriter;
-import java.io.FileWriter;
-import java.io.IOException;
+import java.io.*;
+import java.net.BindException;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.util.*;
-import java.io.*;
-import app_kvECS.app_kvClient.KVClient;
-import app_kvECS.app_kvClient.client.CommManager;
-import app_kvECS.app_kvClient.client.KVStore;
-import app_kvServer.IKVServer;
-import app_kvServer.KVServer;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import app_kvECS.KVStore;
+
 import ecs.ECSNode;
 import ecs.IECSNode;
-import app_kvECS.app_kvClient.client.KVStore;
 import logger.LogSetup;
 import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
 
-public class ECSClient implements IECSClient {
+public class ECSClient implements IECSClient, ServerConnectionListener, Runnable, Serializable {
 
     public BST nodes;
+    private static Logger logger = Logger.getRootLogger();
+    private int port;
+    private ServerSocket serverSocket;
+    private boolean running;
+    private String address;
+    private List<ClientConnection> clientConnections = new ArrayList<ClientConnection>();
     UniqueRandomNumberGenerator randomNumberGen = new UniqueRandomNumberGenerator();
 
-    public ECSClient() {
+    public ECSClient(String address, int port) {
+
         nodes = new BST();
+        this.port = port;
+        this.address = address;
+        startServer();
+
+    }
+    @Override
+    public void run() {
+        this.running = initializeServer();
+        if (serverSocket != null) {
+            while (isRunning()) {
+                try {
+                    Socket client = serverSocket.accept();
+                    ClientConnection connection = new ClientConnection(client, this);
+                    clientConnections.add(connection);
+                    new Thread(connection).start();
+
+                    logger.info(
+                            "From Server: Connected to " + client.getInetAddress().getHostName() + " on port " + client.getPort());
+                } catch (IOException e) {
+                    logger.error("Error! Unable to establish connection. \n", e);
+                }
+            }
+        }
+        logger.info("Server stopped.");
+    }
+
+    public void kill() {
+        logger.info("Killing server.");
+        running = false;
+        try {
+            serverSocket.close();
+        } catch (IOException e) {
+            logger.error("Error! " +
+                    "Unable to close socket on port: " + port, e);
+        }
+    }
+
+    private boolean isRunning() {
+        return this.running;
+    }
+
+    private boolean initializeServer() {
+        logger.info("Initialize server ...here");
+        try {
+            logger.info("port" + port);
+            InetSocketAddress socketAddress = new InetSocketAddress("127.0.0.1", port);
+            logger.info("Initialize server ...here2");
+            serverSocket = new ServerSocket();
+            logger.info("Initialize server ...here3");
+            serverSocket.bind(socketAddress);
+            logger.info("Server listening on port: " + serverSocket.getLocalPort());
+            return true;
+        } catch (IOException e) {
+            logger.error("Error! Cannot open server socket:");
+            if (e instanceof BindException) {
+                logger.error("Port " + port + " is already bound!");
+            }
+            return false;
+        }
     }
 
     @Override
     public boolean start() {
-        for (IECSNode node : nodes.values()){
-            ECSNode escNode = (ECSNode) node;
-            if (escNode.kvServer == null) {
-                escNode.startServer();
-            }
-        }
-        return true;
+        // TODO
+        return false;
     }
 
     @Override
     public boolean stop() {
-        for (IECSNode node : nodes.values()){
-            ECSNode escNode = (ECSNode) node;
-            escNode.kvServer.clearStorage();
-            escNode.kvServer.close();
-        }
-        return true;
+        // TODO
+        return false;
     }
 
     @Override
     public boolean shutdown() {
         // TODO
         return false;
-    }
-
-    public ECSMessage SendMessage(ECSNode node, ECSMessage message){
-        KVStore kvStore = new KVStore(node.getNodeHost(), node.getNodePort());
-        try {
-            kvStore.connect();
-            String receivedMessage = kvStore.sendMessage(serializeToString(message));
-            kvStore.disconnect();
-            return deserializeFromString(receivedMessage);
-        }
-        catch (Exception ex) {
-            kvStore.disconnect();
-            System.out.println(ex.getMessage());
-        }
-        return null;
     }
 
     @Override
@@ -78,12 +120,11 @@ public class ECSClient implements IECSClient {
         String hashCode = getHash(address + ":" + port);
         String[] hashRange = {getStartNodeHash(hashCode), hashCode};
         ECSNode ecsNode = new ECSNode(port + "", address,port,hashRange, cacheSize, dBStoragePath, cacheStrategy);
-        ecsNode.startServer();
         nodes.put(hashCode, ecsNode);
         if (nodes.size() > 1) {
             transferDataForNewNode(hashCode, getSuccessor(hashCode));
             ECSNode successor = (ECSNode) nodes.get(getSuccessor(hashCode));
-            successor.nodeHashRange[0] = hashCode;
+            successor.getNodeHashRange()[0] = hashCode;
         }
         return ecsNode;
     }
@@ -278,7 +319,7 @@ public class ECSClient implements IECSClient {
         String hashOfSuccessor = getSuccessor(removeNodeHash);
         ECSNode successorNode = (ECSNode) nodes.get(hashOfSuccessor);
         transferDataForRemovedNode(removeNode, successorNode);
-        successorNode.nodeHashRange[0] = removeNode.nodeHashRange[0];
+        successorNode.getNodeHashRange()[0] = removeNode.getNodeHashRange()[0];
         try {
             Files.deleteIfExists(Paths.get(removeNode.dBStoragePath,"data.txt"));
             Files.delete(Paths.get(removeNode.dBStoragePath));
@@ -309,6 +350,9 @@ public class ECSClient implements IECSClient {
         }
 
     }
+    public void startServer() {
+        new Thread(this).start();
+    }
 
 
     @Override
@@ -321,6 +365,14 @@ public class ECSClient implements IECSClient {
     public IECSNode getNodeByKey(String Key) {
         // TODO
         return null;
+    }
+
+    public static void main(String[] args) throws IOException {
+        new LogSetup("test2.log", Level.ALL);
+        new ECSClient("127.0.0.1", 5100);
+        while(true){
+
+        }
     }
 
     public String getHash(String key){
@@ -346,6 +398,85 @@ public class ECSClient implements IECSClient {
         return hexString.toString();
     }
 
+    @Override
+    public String onMessageReceived(String message, int port, String address) {
+        if (message.compareTo("New Node") ==0) {
+            String hashCode = getHash(address + ":" + port);
+            String[] hashRange = {getStartNodeHash(hashCode), hashCode};
+            ECSNode ecsNode = new ECSNode(address + port, address,port,hashRange);
+            nodes.put(hashCode, ecsNode);
+            List<String> kvToTransfer = new ArrayList<String>();
+            if (nodes.size() > 1) {
+                kvToTransfer = getKVPairsToTransfer(hashCode, getSuccessor(hashCode));
+                ECSNode successor = (ECSNode) nodes.get(getSuccessor(hashCode));
+                successor.getNodeHashRange()[0] = hashCode;
+                logger.info(nodes.print());
+                return serializeToString(new ECSMessage(ActionType.APPEND, true, kvToTransfer,null, nodes.bst.values()));
+            }
+            logger.info("Added new node to the bst, current state of bst: " + nodes.print());
+            return serializeToString(new ECSMessage(ActionType.APPEND, true,kvToTransfer,null, nodes.bst.values()));
+        }
+        return serializeToString(new ECSMessage(ActionType.UPDATE_METADATA, true,null,null, nodes.bst.values()));
+    }
+
+    private List<String> addConnectedNewNode(int port, String address) {
+        String hashCode = getHash(address + ":" + port);
+        String[] hashRange = {getStartNodeHash(hashCode), hashCode};
+        ECSNode ecsNode = new ECSNode(address + port, address,port,hashRange);
+        nodes.put(hashCode, ecsNode);
+        if (nodes.size() > 1) {
+            List<String> kvToTransfer = getKVPairsToTransfer(hashCode, getSuccessor(hashCode));
+            ECSNode successor = (ECSNode) nodes.get(getSuccessor(hashCode));
+            successor.getNodeHashRange()[0] = hashCode;
+            return kvToTransfer;
+
+        }
+        return null;
+    }
+    private List<String> getKVPairsToTransfer(String newNode, String successor) {
+        String minRange = getPredecessor(newNode); // Minimum value of the range
+        String maxRange = newNode; // Maximum value of the range
+
+        List<String> lines;
+        List<String> linesToTransfer = new ArrayList<String>();
+        List<String> linesToKeep = new ArrayList<String>();
+        try {
+            ECSNode ecsNodeSuccessor = (ECSNode) nodes.get(successor);
+            ECSNode ecsNewNode = (ECSNode) nodes.get(newNode);
+            ECSMessage ecsMessage = sendMessage(ecsNodeSuccessor, new ECSMessage(ActionType.REMOVE, false, null, new String[]{minRange, maxRange}, nodes.bst.values()));
+            if (ecsMessage.success) {
+                return ecsMessage.data;
+            }
+            return null;
+        }
+        catch (Exception ex){
+            logger.error(ex);
+        }
+        return null;
+    }
+
+public ECSMessage sendMessage(ECSNode node, ECSMessage message) throws Exception {
+        KVStore kvStore = new KVStore(node.getNodeHost(), node.getNodePort());
+        kvStore.connect();
+        String recievedString = kvStore.commManager.sendMessage(serializeToString(message));
+        kvStore.disconnect();
+        return deserializeFromString(recievedString);
+}
+    @Override
+    public void onConnectionClosed() {
+
+    }
+    static ECSMessage deserializeFromString(String serializedString) {
+        try {
+            byte[] data = Base64.getDecoder().decode(serializedString);
+            ObjectInputStream objectInputStream = new ObjectInputStream(new ByteArrayInputStream(data));
+            return (ECSMessage) objectInputStream.readObject();
+        } catch (IOException | ClassNotFoundException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
     static String serializeToString(Object obj) {
         try {
             ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
@@ -359,114 +490,4 @@ public class ECSClient implements IECSClient {
         }
     }
 
-    static ECSMessage deserializeFromString(String serializedString) {
-        try {
-            byte[] data = Base64.getDecoder().decode(serializedString);
-            ObjectInputStream objectInputStream = new ObjectInputStream(new ByteArrayInputStream(data));
-            return (ECSMessage) objectInputStream.readObject();
-        } catch (IOException | ClassNotFoundException e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
-
-    private static String generateHelpString() {
-        return "Usage: java KVServer [-p <port>] [-a <address>] [-d <directory>] [-l <logFile>] [-ll <logLevel>] [-c <cacheSize>] [-cs <cacheStrategy>]\n"
-                + "Options:\n"
-                + "  -p <port>          Port number for the KVServer (default: 5000)\n"
-                + "  -a <address>       Address for the KVServer (default: localhost)\n"
-                + "  -d <directory>     Directory for storage (default: current directory)\n"
-                + "  -l <logFile>       File path for the log file (default: ./server.log)\n"
-                + "  -ll <logLevel>     Log level for the server (default: ALL)\n"
-                + "  -c <cacheSize>     Size of the cache (default: 10)\n"
-                + "  -cs <cacheStrategy> Cache replacement strategy (default: None)\n\n"
-                + "Example:\n"
-                + "  java KVServer -p 8080 -a 127.0.0.1 -d /path/to/data -l /path/to/server.log -ll INFO -c 50 -cs LRU";
-    }
-    public static void main(String[] args) {
-
-        String helpString = generateHelpString();
-
-        // Default Values
-        int port = 5000;
-        String address = "localhost";
-        String directory = System.getProperty("user.dir");
-        String logFile = System.getProperty("user.dir") + "/server.log";
-        Level Level;
-        Level logLevel = org.apache.log4j.Level.ALL;
-        IKVServer.CacheStrategy strategy = IKVServer.CacheStrategy.None;
-        int cacheSize = 10;
-
-        if (args.length > 0 && args[0].equals("-h")) {
-            System.out.println(helpString);
-            System.exit(1);
-        }
-
-        if (args.length % 2 != 0) {
-            System.out.println("Invalid number of arguments");
-            System.out.println(helpString);
-            System.exit(1);
-        }
-
-        try {
-            for (int i = 0; i < args.length; i += 2) {
-                switch (args[i]) {
-                    case "-p":
-                        port = Integer.parseInt(args[i + 1]);
-                        break;
-                    case "-a":
-                        address = args[i + 1];
-                        break;
-                    case "-d":
-                        directory = args[i + 1];
-                        break;
-                    case "-l":
-                        logFile = args[i + 1];
-                        break;
-                    case "-ll":
-                        if (LogSetup.isValidLevel(args[i + 1]))
-                            logLevel = org.apache.log4j.Level.toLevel(args[i + 1]);
-                        else {
-                            System.out.println("Invalid log level: " + args[i + 1]);
-                            System.out.println(helpString);
-                            System.exit(1);
-                        }
-                        break;
-                    case "-c":
-                        cacheSize = Integer.parseInt(args[i + 1]);
-                        break;
-                    case "-cs":
-                        strategy = IKVServer.CacheStrategy.valueOf(args[i + 1]);
-                        break;
-                    default:
-                        System.out.println("Invalid argument: " + args[i]);
-                        System.out.println(helpString);
-                        System.exit(1);
-                }
-            }
-        } catch (NumberFormatException nfe) {
-            System.out.println("Error! Invalid argument -p! Not a number!");
-            System.out.println(helpString);
-            System.exit(1);
-        } catch (IllegalArgumentException iae) {
-            System.out.println("Error! Invalid argument -cs! Not a valid cache strategy!");
-            System.out.println(helpString);
-            System.exit(1);
-        } catch (Exception e) {
-            System.out.println("Unexpected error:\n" + e.getMessage());
-            System.out.println(helpString);
-            System.exit(1);
-        }
-
-        try {
-            new LogSetup(logFile, logLevel);
-            new KVServer(port, cacheSize, strategy.toString(), address, directory);
-        } catch (IOException e) {
-            System.out.println("Error! Unable to initialize logger!");
-            System.exit(1);
-        } catch (Exception e) {
-            System.out.println("Unexpected error:\n" + e.getMessage());
-            System.exit(1);
-        }
-    }
 }

@@ -1,4 +1,7 @@
 package app_kvECS;
+import ecs.ECSNode;
+import ecs.IECSNode;
+
 import java.io.*;
 import java.util.*;
 
@@ -9,9 +12,9 @@ public class ECSMessage implements Serializable {
 
     public String[] range;
 
-    public BST nodes;
+    public Collection<IECSNode> nodes;
 
-    public ECSMessage(ActionType action, boolean success, List<String> data, String[] range, BST nodes) {
+    public ECSMessage(ActionType action, boolean success, List<String> data, String[] range, Collection<IECSNode> nodes) {
         this.action = action;
         this.success = success;
         this.data = data;

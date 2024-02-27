@@ -3,16 +3,34 @@ package app_kvECS;
 import ecs.ECSNode;
 import ecs.IECSNode;
 
-import java.nio.file.Path;
+import java.io.Serializable;
 import java.util.*;
+import java.io.*;
 
-public class BST {
+
+public class BST implements Serializable {
     public TreeMap<String, IECSNode> bst;
 
     public BST() {
         bst = new TreeMap<>();
     }
+    // Serialize the BST to a byte array
+    public byte[] serialize() throws IOException {
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        ObjectOutputStream objectOutputStream = new ObjectOutputStream(byteArrayOutputStream);
+        objectOutputStream.writeObject(this);
+        objectOutputStream.close();
+        return byteArrayOutputStream.toByteArray();
+    }
 
+    // Deserialize a byte array to reconstruct the BST
+    public static BST deserialize(byte[] data) throws IOException, ClassNotFoundException {
+        ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(data);
+        ObjectInputStream objectInputStream = new ObjectInputStream(byteArrayInputStream);
+        BST bst = (BST) objectInputStream.readObject();
+        objectInputStream.close();
+        return bst;
+    }
     public void put(String key, ECSNode node) {
         bst.put(key, node);
     }
@@ -67,5 +85,15 @@ public class BST {
 
     public Collection<IECSNode> values() {
         return bst.values();
+    }
+    public String print() {
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<String, IECSNode> entry : bst.entrySet()) {
+            sb.append("Key: ").append(entry.getKey())
+                    .append(", Range: ").append(Arrays.toString(entry.getValue().getNodeHashRange()))
+                    .append(", NodeName: ").append(entry.getValue().getNodeName())
+                    .append("\n");
+        }
+        return sb.toString();
     }
 }

@@ -22,8 +22,15 @@ public class ECSNode implements IECSNode {
         this.strategy = strategy;
     }
 
+    public ECSNode(String nodeName, String address, int port, String[] hashRange) {
+        this.nodeName = nodeName;
+        this.nodeHost = address;
+        this.nodePort = port;
+        this.nodeHashRange = hashRange;
+    }
+
     public void startServer() {
-        kvServer = new KVServer(nodePort, cacheSize, strategy, nodeHost, dBStoragePath);
+        kvServer = new KVServer(nodePort, 0, cacheSize, strategy, nodeHost, dBStoragePath);
     }
     public String getNodeName(){
         return this.nodeName;
@@ -34,11 +41,11 @@ public class ECSNode implements IECSNode {
     }
 
     public int getNodePort(){
-        return 0;
+        return this.nodePort;
     }
 
     public String[] getNodeHashRange(){
-        return null;
+        return nodeHashRange;
     }
 
 }

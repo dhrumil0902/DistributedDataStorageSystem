@@ -14,7 +14,7 @@ public class AdditionalTest extends TestCase {
 	@Test
     public void testBytesToHex() {
         byte[] byteArray = {0x0A, 0x1F, 0x2B, (byte) 0xFF}; // Example byte array
-         ECSClient client = new ECSClient();
+         ECSClient client = new ECSClient("t", 6);
          String temp = client.bytesToHex(byteArray);
 
          String c1 = "0b1";
@@ -32,7 +32,7 @@ public class AdditionalTest extends TestCase {
 
         @Test
         public void testAddNode() {
-            ECSClient client = new ECSClient();
+            ECSClient client = new ECSClient("t", 6);
             client.addNode("temp", 56);
             client.addNode("temp", 56);
             client.addNode("temp", 56);
@@ -62,7 +62,7 @@ public class AdditionalTest extends TestCase {
         }
         @Test
         public void testGetNodeHashStartRange() {
-            ECSClient client = new ECSClient();
+            ECSClient client = new ECSClient("7",7);
             client.nodes.put("0000000000000600000000001", null);
             String tmep = client.getStartNodeHash("0070000000000600000000001");
 

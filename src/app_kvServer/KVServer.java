@@ -56,7 +56,7 @@ public class KVServer implements IKVServer, Runnable {
     private KVStorage storage;
     private final Object lock = new Object();
     private BST metadata;
-
+    private boolean writeLock;
     private List<ClientConnection> clientConnections = new ArrayList<ClientConnection>();
 
 //    public KVServer(int port, int cacheSize, String strategy) {
@@ -72,6 +72,7 @@ public class KVServer implements IKVServer, Runnable {
         this.address = address;
         this.port = port;
         this.cacheSize = cacheSize;
+        this.writeLock = false;
         try {
             this.strategy = CacheStrategy.valueOf(strategy);
         } catch (IllegalArgumentException e) {
@@ -246,6 +247,25 @@ public class KVServer implements IKVServer, Runnable {
         } catch (IOException e) {
             logger.error("Unable to retrieve data from storage", e);
             return null;
+        }
+    }
+
+    public List<String> getData(String minVal, String maxVal) {
+        try {
+            return storage.getData(minVal,  maxVal);
+        } catch (IOException e) {
+            logger.error("Unable to retrieve data from storage", e);
+            return null;
+        }
+    }
+
+    public boolean removeData(String minVal, String maxVal) {
+        try {
+            storage.removeData(minVal,  maxVal);
+            return true;
+        } catch (IOException e) {
+            logger.error("Unable to remove data from storage", e);
+            return false;
         }
     }
 
@@ -513,6 +533,12 @@ public class KVServer implements IKVServer, Runnable {
     public void setAddress(String address) {
         this.address = address;
     }
+
+    public void updateMetadata(BST metadata) {this.metadata = metadata;}
+
+    public boolean getWriteLock() {return this.writeLock;}
+
+    public void setWriteLock(boolean flag) {this.writeLock = flag;}
 
     private static String generateHelpString() {
         return "Usage: java KVServer [-p <port>] [-a <address>] [-d <directory>] [-l <logFile>] [-ll <logLevel>] [-c <cacheSize>] [-cs <cacheStrategy>]\n"

@@ -15,6 +15,8 @@ import app_kvECS.ServerConnection;
 import app_kvServer.KVServer;
 import ecs.ECSNode;
 import ecs.IECSNode;
+import shared.utils.HashUtils;
+import shared.utils.HashUtils.*;
 import logger.LogSetup;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -117,7 +119,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
         String address = "127.0.0.1";
         int port = randomNumberGen.generateUniqueFourDigitNumber();
         String dBStoragePath = System.getProperty("user.dir") + "/" + port;
-        String hashCode = getHash(address + ":" + port);
+        String hashCode = HashUtils.getHash(address + ":" + port);
         String[] hashRange = {getStartNodeHash(hashCode), hashCode};
         ECSNode ecsNode = new ECSNode(port + "", address,port,hashRange, cacheSize, dBStoragePath, cacheStrategy);
         nodes.put(hashCode, ecsNode);
@@ -130,7 +132,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
     }
 
     public String putkeyValue(String key, String value){
-        String hashedKey = getHash(key);
+        String hashedKey = HashUtils.getHash(key);
         if (nodes.isEmpty()){
             return null;
         }
@@ -183,7 +185,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
             lines = Files.readAllLines(filePathSuccessor);
             for (String line : lines) {
                 System.out.println(line);
-                String keyHashed = getHash(line.split(" ") [0]);
+                String keyHashed = HashUtils.getHash(line.split(" ") [0]);
                 if (maxRange.compareTo(minRange) > 0){
                     if (keyHashed.compareTo(minRange) > 0 && keyHashed.compareTo(maxRange) <= 0){
                         linesToTransfer.add(line);
@@ -367,33 +369,9 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
         return null;
     }
 
-    public String getHash(String key){
-        try {
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            byte[] md5Bytes = md.digest(key.getBytes());
-            return bytesToHex(md5Bytes);
-        } catch (Exception e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
-
-    public String bytesToHex(byte[] bytes) {
-        StringBuilder hexString = new StringBuilder();
-        for (byte b : bytes) {
-            String hex = Integer.toHexString(b & 0xFF);
-            if (hex.length() == 1) {
-                hexString.append('0'); // Add leading zero if necessary
-            }
-            hexString.append(hex);
-        }
-        return hexString.toString();
-    }
-
-
     public ECSMessage onMessageReceived(String message, int port, String address) {
         if (message.compareTo("New Node") ==0) {
-            String hashCode = getHash(address + ":" + port);
+            String hashCode = HashUtils.getHash(address + ":" + port);
             String[] hashRange = {getStartNodeHash(hashCode), hashCode};
             ECSNode ecsNode = new ECSNode(address + port, address,port,hashRange);
             nodes.put(hashCode, ecsNode);
@@ -431,7 +409,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
     //}
 
     private List<String> addConnectedNewNode(int port, String address) {
-        String hashCode = getHash(address + ":" + port);
+        String hashCode = HashUtils.getHash(address + ":" + port);
         String[] hashRange = {getStartNodeHash(hashCode), hashCode};
         ECSNode ecsNode = new ECSNode(address + port, address,port,hashRange);
         nodes.put(hashCode, ecsNode);

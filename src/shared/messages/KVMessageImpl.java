@@ -1,6 +1,8 @@
 package shared.messages;
 
-public class KVMessageImpl implements KVMessage {
+import java.io.Serializable;
+
+public class KVMessageImpl implements KVMessage, Serializable {
 
     private String key;
     private String value;

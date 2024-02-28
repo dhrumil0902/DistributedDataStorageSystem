@@ -8,6 +8,7 @@ import org.apache.log4j.Level;
 import org.junit.Test;
 import app_kvECS.ECSClient;
 import junit.framework.TestCase;
+import shared.utils.HashUtils;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -19,7 +20,7 @@ public class AdditionalTest extends TestCase {
     public void testBytesToHex() {
         byte[] byteArray = {0x0A, 0x1F, 0x2B, (byte) 0xFF}; // Example byte array
          ECSClient client = new ECSClient("t", 6);
-         String temp = client.bytesToHex(byteArray);
+         String temp = HashUtils.bytesToHex(byteArray);
 
          String c1 = "0b1";
          String c2 = "0b2";
@@ -31,7 +32,7 @@ public class AdditionalTest extends TestCase {
          else{
              System.out.println(c2 + " is greater");
         }
-        String temp1 = client.getHash("127.8.9:5500");
+        String temp1 = HashUtils.getHash("127.8.9:5500");
     }
 
     @Test

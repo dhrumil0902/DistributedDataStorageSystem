@@ -2,6 +2,7 @@ package app_kvServer;
 
 import app_kvECS.ECSClient;
 import app_kvECS.ECSMessage;
+import app_kvECS.ECSMessage.ActionType;
 import org.apache.log4j.*;
 import shared.messages.KVMessage;
 
@@ -15,7 +16,7 @@ import java.io.*;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-public class ClientConnection implements Runnable{
+public class ClientConnection implements Runnable {
 
     private static final Logger logger = Logger.getRootLogger();
     private final Socket clientSocket;
@@ -79,26 +80,89 @@ public class ClientConnection implements Runnable{
             isOpen = false;
             return;
         }
+        ActionType action = msg.getAction();
+        String[] range = msg.getRange();
         ECSMessage response = new ECSMessage();
-        switch (msg.getAction()) {
+        response.setAction(action);
+        switch (action) {
             case SET_WRITE_LOCK:
+                if (kvServer.getWriteLock()) {
+                    // write lock already set
+                    response.setSuccess(false);
+                    response.setErrorMessage("Write lock already set.");
+                    break;
+                }
+                kvServer.setWriteLock(true);
+                response.setSuccess(true);
+                break;
+            case UNSET_WRITE_LOCK:
+                if (!kvServer.getWriteLock()) {
+                    // write lock not set
+                    response.setSuccess(false);
+                    response.setErrorMessage("Write lock not set.");
+                    break;
+                }
+                kvServer.setWriteLock(false);
+                response.setSuccess(true);
                 break;
             case APPEND:
+                if (!kvServer.getWriteLock()) {
+                    // write lock not set
+                    response.setSuccess(false);
+                    response.setErrorMessage("Write lock not set.");
+                    break;
+                }
                 kvServer.appendDataToStorage(msg.getData());
-                response.setAction(msg.getAction());
                 response.setSuccess(true);
                 break;
-            case GET_ALL:
-                response.setData(kvServer.getAllData());
+            case GET_DATA:
+                if (!kvServer.getWriteLock()) {
+                    // write lock not set
+                    response.setSuccess(false);
+                    response.setErrorMessage("Write lock not set.");
+                    break;
+                }
+                if (range == null) {
+                    response.setData(kvServer.getAllData());
+                } else {
+                    response.setData(kvServer.getData(range[0], range[1]));
+                }
+                if (response.getData() != null) {
+                    response.setSuccess(true);
+                } else {
+                    response.setSuccess(false);
+                    response.setErrorMessage("Unable to append data.");
+                }
+                break;
+            case REMOVE:
+                if (!kvServer.getWriteLock()) {
+                    // write lock not set
+                    response.setSuccess(false);
+                    response.setErrorMessage("Write lock not set.");
+                    break;
+                }
+                if (kvServer.removeData(range[0], range[1])) {
+                    response.setSuccess(true);
+                } else {
+                    response.setSuccess(false);
+                    response.setErrorMessage("Unable to remove data.");
+                }
+                break;
+            case UPDATE_METADATA:
+                kvServer.updateMetadata(msg.getNodes());
                 response.setSuccess(true);
+                break;
+            case DELETE:
+                kvServer.close();
                 break;
             default:
-                logger.error("Unknown identified message from kvServer: " + msg);
+                logger.error("Unknown message from ECS: " + msg);
         }
         sendMessage(response);
+        isOpen = false;
     }
 
-    private void handleKVMessage (KVMessage msg) {
+    private void handleKVMessage(KVMessage msg) {
 
     }
 
@@ -107,7 +171,7 @@ public class ClientConnection implements Runnable{
         output.flush();
     }
 
-    public void close() throws IOException{
+    public void close() throws IOException {
         if (isOpen) {
             isOpen = false;
 //            sendMessage("DISCONNECT");

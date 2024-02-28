@@ -1,12 +1,15 @@
 package app_kvServer;
 
 import org.apache.log4j.Logger;
+import shared.utils.HashUtils;
 
 import java.io.*;
+import java.math.BigInteger;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
 
 public class KVStorage {
@@ -134,6 +137,82 @@ public class KVStorage {
 
     public synchronized List<String> getAllData() throws IOException {
         return Files.readAllLines(filePath);
+    }
+
+    public synchronized List<String> getData(String minVal, String maxVal) throws IOException{
+        BigInteger bottom = new BigInteger(minVal, 16);
+        BigInteger top = new BigInteger(maxVal, 16);
+        List<String> result = new ArrayList<>();
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] parts = line.split(" ", 2); // Split line into "key" and "value"
+                if (parts.length < 2) continue; // Skip if line does not contain both key and value
+
+                String key = parts[0];
+                String hashHex = HashUtils.getHash(key);
+                BigInteger hashValue = new BigInteger(hashHex, 16);
+
+                if (top.compareTo(bottom) > 0) {
+                    // Normal range: bottom <= hashValue <= top
+                    if (hashValue.compareTo(bottom) >= 0 && hashValue.compareTo(top) <= 0) {
+                        result.add(line);
+                    }
+                } else if (top.compareTo(bottom) < 0) {
+                    // Corner range: hashValue <= top OR hashValue >= bottom
+                    if (hashValue.compareTo(top) <= 0 || hashValue.compareTo(bottom) >= 0) {
+                        result.add(line);
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    public synchronized void removeData(String minVal, String maxVal) throws IOException {
+        BigInteger bottom = new BigInteger(minVal, 16);
+        BigInteger top = new BigInteger(maxVal, 16);
+        File tempFile = new File(file.getAbsolutePath() + ".tmp");
+        List<String> toRemove = new ArrayList<>();
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(file));
+             BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] parts = line.split(" ", 2);
+                if (parts.length < 2) continue;
+
+                String key = parts[0];
+                String hashHex = HashUtils.getHash(key);
+                BigInteger hashValue = new BigInteger(hashHex, 16);
+
+                boolean shouldRemove = (top.compareTo(bottom) > 0) ?
+                        (hashValue.compareTo(bottom) >= 0 && hashValue.compareTo(top) <= 0) :
+                        (hashValue.compareTo(top) <= 0 || hashValue.compareTo(bottom) >= 0);
+
+                if (!shouldRemove) {
+                    writer.write(line);
+                    writer.newLine();
+                } else {
+                    toRemove.add(line);
+                }
+            }
+        }
+
+        // Replace the original file with the temp file
+        if (!toRemove.isEmpty()) { // Check if there's anything to remove
+            if (!file.delete()) {
+                throw new IOException("Could not delete the original file.");
+            }
+            if (!tempFile.renameTo(file)) {
+                throw new IOException("Could not rename the temp file to the original file name.");
+            }
+        } else { // If nothing to remove, just delete the temp file
+            if (!tempFile.delete()) {
+                throw new IOException("Could not delete the temp file.");
+            }
+        }
     }
 
     public synchronized boolean inStorage(String key) throws RuntimeException{

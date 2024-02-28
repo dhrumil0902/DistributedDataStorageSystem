@@ -11,10 +11,10 @@ public class KVMessageImpl implements KVMessage {
         this.value = value;
         this.status = status;
     }
-    
+
     public KVMessageImpl() {
     }
-  
+
     @Override
     public String getKey() {
         return key;
@@ -29,26 +29,29 @@ public class KVMessageImpl implements KVMessage {
     public StatusType getStatus() {
         return status;
     }
-    
+
     public static KVMessage fromString(String message) throws IllegalArgumentException {
-    	String[] splitMessage = message.split(" ");
+        if (message == null || message.isEmpty()) {
+            throw new IllegalArgumentException("Message is null or empty");
+        }
+        String[] splitMessage = message.split(" ");
         StatusType status;
         String key;
         String value;
 
         if (splitMessage.length < 2) {
-            throw new IllegalArgumentException("Message requires at least a status and a key");
+            throw new IllegalArgumentException("Message requires at least a status and a key, got: " + message);
         }
 
-    	status = StatusType.valueOf(splitMessage[0].toUpperCase());
+        status = KVMessage.StatusType.valueOf(splitMessage[0].toUpperCase());
         key = splitMessage[1];
         if (splitMessage.length == 2) {
             value = "";
         } else {
             value = message.substring(splitMessage[0].length() + splitMessage[1].length() + 2);
         }
-    	
-    	return new KVMessageImpl(key, value, status);
+
+        return new KVMessageImpl(key, value, status);
     }
 
     @Override

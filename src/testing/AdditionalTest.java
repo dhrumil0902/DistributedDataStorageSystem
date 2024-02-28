@@ -1,11 +1,15 @@
 package testing;
 
+import app_kvServer.KVServer;
 import ecs.ECSNode;
 import ecs.IECSNode;
+import logger.LogSetup;
+import org.apache.log4j.Level;
 import org.junit.Test;
 import app_kvECS.ECSClient;
 import junit.framework.TestCase;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -30,39 +34,32 @@ public class AdditionalTest extends TestCase {
         String temp1 = client.getHash("127.8.9:5500");
     }
 
+    @Test
+    public void addServer(){
+        try {
+            new LogSetup("test2.log", Level.ALL);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        ECSClient client = new ECSClient("localhost",5100);
+        KVServer server = new KVServer("localhost", 5100, "localhost", 6700, 0, "None", "/homes/p/pate1385/ece419/ms2-group-38-good/src/testing/AdditionalTest.java");
+        System.out.println("done");
+    }
+
         @Test
         public void testAddNode() {
-            ECSClient client = new ECSClient("t", 6);
-            client.addNode("temp", 56);
-            client.addNode("temp", 56);
-            client.addNode("temp", 56);
-            client.putkeyValue("TEST KEY", "THIS IS THE VALUE");
-            client.putkeyValue("zebra", "THIS IS THE VALUE");
-            client.putkeyValue("giraffe", "THIS IS THE VALUE");
-            client.putkeyValue("kangaroo", "THIS IS THE VALUE");
-            client.putkeyValue("god", "THIS IS THE VALUE");
-            client.putkeyValue("bat", "THIS IS THE VALUE");
-            client.putkeyValue("fvdfvdfv", "THIS IS THE VALUE");
-            client.addNode("temp", 56);
-
-            List<String> keysToRemove = new ArrayList<>();
-            for (String hashKey : client.nodes.keys()) {
-                keysToRemove.add(hashKey);
+            try {
+                new LogSetup("test2.log", Level.ALL);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
-
-            for (String hashKey : keysToRemove) {
-                IECSNode node = client.nodes.get(hashKey);
-                if (node instanceof ECSNode) {
-                    ECSNode ecsNode = (ECSNode) node;
-                    client.removeNode(ecsNode.getNodeName());
-                } else {
-                    System.err.println("Error: Unexpected node type encountered for key: " + hashKey);
-                }
-            }
+            ECSClient client = new ECSClient("localhost",5100);
+            KVServer server = new KVServer("localhost", 5100, "localhost", 6700, 0, "None", "/homes/p/pate1385/ece419/ms2-group-38-good/src/testing/AdditionalTest.java");
+            System.out.println("done");
         }
         @Test
         public void testGetNodeHashStartRange() {
-            ECSClient client = new ECSClient("7",7);
+            ECSClient client = new ECSClient("7", 7);
             client.nodes.put("0000000000000600000000001", null);
             String tmep = client.getStartNodeHash("0070000000000600000000001");
 
@@ -74,7 +71,6 @@ public class AdditionalTest extends TestCase {
             tmep = client.getStartNodeHash("0000000000000000000000001");
             client.nodes.put("0500000000000000000000001", null);
             tmep = client.getStartNodeHash("0000000000000000000000001");
-            client.addNode("temp",56);
+            client.addNode("temp", 56);
         }
-
 }

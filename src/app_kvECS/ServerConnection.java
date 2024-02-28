@@ -83,8 +83,7 @@ public class ServerConnection implements Runnable{
 					String address = msg.getServerInfo()[0];
 					try {
 						int port = Integer.parseInt(msg.getServerInfo()[1]);
-						response.setNodes(ecsServer.addNode(port, address));
-						response.setSuccess(true);
+						response = ecsServer.onMessageReceived("New Node", port,address);
 					} catch (NumberFormatException e) {
 						logger.error("Invalid port number: " + msg.getServerInfo()[1], e);
 						// Optionally, set response failure or other fields here

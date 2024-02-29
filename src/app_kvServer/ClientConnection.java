@@ -157,17 +157,29 @@ public class ClientConnection implements Runnable {
             return;
         }
         StatusType status = msg.getStatus();
-        String key = msg.getKey();
         KVMessage response = new KVMessageImpl();
         switch (status) {
             case GET:
+                if (!kvServer.checkRegisterStatus()) {
+                    response.setStatus(StatusType.SERVER_STOPPED);
+                    break;
+                }
                 response = kvServer.handleGetMessage(msg);
                 break;
             case PUT:
-                response = kvServer.handlePutMessage(msg);
+                if (!kvServer.checkRegisterStatus()) {
+                    response.setStatus(StatusType.SERVER_STOPPED);
+                    break;
+                }
+                    response = kvServer.handlePutMessage(msg);
+                break;
+            case DISCONNECT:
+                isOpen = false;
+                logger.info("Connection terminated by client");
                 break;
             default:
                 logger.error("Unknown message from client: " + msg);
+                break;
         }
         sendMessage(response);
     }

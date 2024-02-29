@@ -582,6 +582,8 @@ public class KVServer implements IKVServer, Runnable {
         return this.metadata;
     }
 
+    public boolean checkRegisterStatus() {return this.register;}
+
     private static String generateHelpString() {
         return "Usage: java KVServer [-p <port>] [-a <address>] [-d <directory>] [-l <logFile>] [-ll <logLevel>] [-c <cacheSize>] [-cs <cacheStrategy>]\n"
                 + "Options:\n"

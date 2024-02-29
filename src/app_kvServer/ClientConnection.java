@@ -1,12 +1,12 @@
 package app_kvServer;
 
-import app_kvECS.ECSClient;
-import app_kvECS.ECSMessage;
-import app_kvECS.ECSMessage.ActionType;
 import shared.messages.KVMessage.StatusType;
 import org.apache.log4j.*;
+
+import shared.messages.ECSMessage;
 import shared.messages.KVMessage;
 import shared.messages.KVMessageImpl;
+import shared.messages.ECSMessage.ActionType;
 
 import java.io.BufferedInputStream;
 import java.io.File;

@@ -1,5 +1,7 @@
 package app_kvServer;
 
+import static shared.messages.ECSMessage.ActionType;
+
 import java.io.File;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -12,12 +14,12 @@ import java.util.List;
 import java.util.AbstractMap.SimpleEntry;
 import java.io.IOException;
 
-import app_kvECS.BST;
-import app_kvECS.ECSMessage;
 import app_kvServer.kvCache.FIFOCache;
 import app_kvServer.kvCache.IKVCache;
 import app_kvServer.kvCache.LFUCache;
 import app_kvServer.kvCache.LRUCache;
+import shared.BST;
+import shared.messages.ECSMessage;
 import shared.messages.KVMessage;
 import shared.messages.KVMessage.StatusType;
 import shared.messages.KVMessageImpl;
@@ -30,8 +32,6 @@ import java.net.InetSocketAddress;
 
 
 import java.util.Map;
-
-import static app_kvECS.ECSMessage.ActionType;
 
 public class KVServer implements IKVServer, Runnable {
     /**

@@ -1,8 +1,8 @@
 package shared.messages;
 
-import app_kvECS.BST;
-
 import java.io.Serializable;
+
+import shared.BST;
 
 public class KVMessageImpl implements KVMessage, Serializable {
 

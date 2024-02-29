@@ -1,8 +1,10 @@
 package app_kvECS;
 
 import app_kvECS.ECSClient;
-import app_kvECS.ECSMessage;
+
 import org.apache.log4j.*;
+
+import shared.messages.ECSMessage;
 import shared.messages.KVMessage;
 
 import java.io.BufferedInputStream;

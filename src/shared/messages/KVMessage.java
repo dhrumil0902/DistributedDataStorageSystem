@@ -1,6 +1,6 @@
 package shared.messages;
 
-import app_kvECS.BST;
+import shared.BST;
 
 public interface KVMessage {
 

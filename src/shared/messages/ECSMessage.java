@@ -1,6 +1,8 @@
-package app_kvECS;
+package shared.messages;
 import java.io.*;
 import java.util.*;
+
+import shared.BST;
 
 public class ECSMessage implements Serializable {
 

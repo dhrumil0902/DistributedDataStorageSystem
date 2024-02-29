@@ -1,4 +1,4 @@
-package app_kvECS;
+package shared;
 
 import ecs.ECSNode;
 import ecs.IECSNode;

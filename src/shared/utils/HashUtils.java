@@ -1,5 +1,6 @@
 package shared.utils;
 
+import java.math.BigInteger;
 import java.security.MessageDigest;
 
 public class HashUtils {
@@ -24,5 +25,20 @@ public class HashUtils {
             hexString.append(hex);
         }
         return hexString.toString();
+    }
+
+    public static boolean evaluateKeyHash(String key, String minVal, String maxVal) {
+        BigInteger bottom = new BigInteger(minVal, 16);
+        BigInteger top = new BigInteger(maxVal, 16);
+        String hashHex = getHash(key);
+        BigInteger hashValue = new BigInteger(hashHex, 16);
+        if (top.compareTo(bottom) > 0) {
+            // Normal range: bottom <= hashValue <= top
+            return hashValue.compareTo(bottom) >= 0 && hashValue.compareTo(top) <= 0;
+        } else if (top.compareTo(bottom) < 0) {
+            // Corner range: hashValue <= top OR hashValue >= bottom
+            return hashValue.compareTo(top) <= 0 || hashValue.compareTo(bottom) >= 0;
+        }
+        return false;
     }
 }

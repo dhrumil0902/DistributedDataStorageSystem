@@ -1,5 +1,7 @@
 package shared.messages;
 
+import app_kvECS.BST;
+
 import java.io.Serializable;
 
 public class KVMessageImpl implements KVMessage, Serializable {
@@ -7,6 +9,8 @@ public class KVMessageImpl implements KVMessage, Serializable {
     private String key;
     private String value;
     private StatusType status;
+    private BST metadata;
+    private String errorMessage;
 
     public KVMessageImpl(String key, String value, StatusType status) {
         this.key = key;
@@ -23,14 +27,26 @@ public class KVMessageImpl implements KVMessage, Serializable {
     }
 
     @Override
+    public void setKey(String key) { this.key = key;}
+
+    @Override
     public String getValue() {
         return value;
     }
 
     @Override
+    public void setValue(String value) {this.value = value;}
+
+    @Override
     public StatusType getStatus() {
         return status;
     }
+
+    @Override
+    public void setStatus(StatusType status) {this.status = status;}
+
+    @Override
+    public void setMetadata(BST metadata) {this.metadata = metadata;}
 
     public static KVMessage fromString(String message) throws IllegalArgumentException {
         if (message == null || message.isEmpty()) {

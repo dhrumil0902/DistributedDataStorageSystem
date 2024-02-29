@@ -18,6 +18,10 @@ import app_kvServer.kvCache.FIFOCache;
 import app_kvServer.kvCache.IKVCache;
 import app_kvServer.kvCache.LFUCache;
 import app_kvServer.kvCache.LRUCache;
+import shared.messages.KVMessage;
+import shared.messages.KVMessage.StatusType;
+import shared.messages.KVMessageImpl;
+import shared.utils.HashUtils;
 import logger.LogSetup;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -195,7 +199,7 @@ public class KVServer implements IKVServer, Runnable {
         }
     }
 
-    public boolean deleteKV(String key) throws Exception{
+    public boolean deleteKV(String key) throws Exception {
         if (inCache(key)) {
             cache.deleteKV(key);
         } else if (inStorage(key)) {
@@ -210,7 +214,7 @@ public class KVServer implements IKVServer, Runnable {
         return true;
     }
 
-    public void updateStorage(String key, String value) throws Exception{
+    public void updateStorage(String key, String value) throws Exception {
         // Update kv to storage
         if (cache == null) {
             try {
@@ -252,7 +256,7 @@ public class KVServer implements IKVServer, Runnable {
 
     public List<String> getData(String minVal, String maxVal) {
         try {
-            return storage.getData(minVal,  maxVal);
+            return storage.getData(minVal, maxVal);
         } catch (IOException e) {
             logger.error("Unable to retrieve data from storage", e);
             return null;
@@ -261,7 +265,7 @@ public class KVServer implements IKVServer, Runnable {
 
     public boolean removeData(String minVal, String maxVal) {
         try {
-            storage.removeData(minVal,  maxVal);
+            storage.removeData(minVal, maxVal);
             return true;
         } catch (IOException e) {
             logger.error("Unable to remove data from storage", e);
@@ -285,7 +289,7 @@ public class KVServer implements IKVServer, Runnable {
         }
     }
 
-    private void writeEvictedToStorage(String key, String value) throws RuntimeException{
+    private void writeEvictedToStorage(String key, String value) throws RuntimeException {
         try {
             storage.putKV(key, value);
         } catch (RuntimeException e) {
@@ -417,111 +421,139 @@ public class KVServer implements IKVServer, Runnable {
     }
 
 
-//    @Override
-    public String onMessageReceived(String message) {
-        if (message == null || message.isEmpty()) {
-            logger.error("SERVER: Received empty or null message from client.");
-            return "FAILED Received empty or null message from client";
-        }
+    //    @Override
+//    public String onMessageReceived(String message) {
+//        if (message == null || message.isEmpty()) {
+//            logger.error("SERVER: Received empty or null message from client.");
+//            return "FAILED Received empty or null message from client";
+//        }
+//
+//        logger.info("SERVER: Received message from client: " + message);
+//        logger.info("SERVER: Parsing the message on the server side ...");
+//
+//        String[] splitMessage = message.split(" ");
+//
+//        if (splitMessage.length == 0) {
+//            logger.error("Invalid empty message received.");
+//            return "FAILED Invalid empty message received.";
+//        }
+//
+//        String command = splitMessage[0];
+//
+//        switch (command) {
+//            case "get":
+//                return handleGetMessage(splitMessage);
+//
+//            case "put":
+//                return handlePutMessage(splitMessage);
+//
+//            default:
+//                logger.error("Unknown command: " + command);
+//                return "FAILED unknown command " + command;
+//        }
+//    }
 
-        logger.info("SERVER: Received message from client: " + message);
-        logger.info("SERVER: Parsing the message on the server side ...");
-
-        String[] splitMessage = message.split(" ");
-
-        if (splitMessage.length == 0) {
-            logger.error("Invalid empty message received.");
-            return "FAILED Invalid empty message received.";
-        }
-
-        String command = splitMessage[0];
-
-        switch (command) {
-            case "get":
-                return handleGetMessage(splitMessage);
-
-            case "put":
-                return handlePutMessage(splitMessage);
-
-            default:
-                logger.error("Unknown command: " + command);
-                return "FAILED unknown command " + command;
-        }
+    public boolean checkKeyRange(String key) {
+        String nodeHash = HashUtils.getHash(address + ":" + port);
+        String[] keyRange = metadata.get(nodeHash).getNodeHashRange();
+        return HashUtils.evaluateKeyHash(key, keyRange[0], keyRange[1]);
     }
 
-    private String handleGetMessage(String[] messageParts) {
-        if (messageParts.length == 2) {
+    public KVMessage handleGetMessage(KVMessage message) {
+        String key = message.getKey();
+        KVMessage response = new KVMessageImpl();
+        if (checkKeyRange(key)) {
+            response.setKey(key);
             synchronized (lock) {
-                String key = messageParts[1];
                 try {
                     logger.info("SERVER: Trying to GET the value associated with Key '" + key);
                     String value = getKV(key);
                     if (value == null || value.isEmpty()) {
-                        return "GET_ERROR " + key;
+                        response.setStatus(StatusType.GET_ERROR);
+                        return response;
                     }
-                    return String.format("GET_SUCCESS %s %s", key, value);
+                    response.setStatus(StatusType.GET_SUCCESS);
+                    response.setValue(value);
                 } catch (Exception e) {
                     logger.error("Error retrieving value for key '" + key + "': " + e.getMessage());
-                    return "GET_ERROR " + key;
+                    response.setStatus(StatusType.GET_ERROR);
+                    return response;
                 }
             }
+        } else {
+            response.setStatus(StatusType.SERVER_NOT_RESPONSIBLE);
+            response.setMetadata(this.metadata);
         }
-        return "GET_ERROR " + messageParts[1];
+        return response;
+
     }
 
-    private String handlePutMessage(String[] messageParts) {
-        if (messageParts.length >= 3) {
-            String key = messageParts[1];
-            String value = String.join(" ", Arrays.copyOfRange(messageParts, 2, messageParts.length));
-            String returnString = " ";
+    public KVMessage handlePutMessage(KVMessage message) {
+        String key = message.getKey();
+        KVMessage response = new KVMessageImpl();
+        if (getWriteLock()) {
+            response.setStatus(StatusType.SERVER_WRITE_LOCK);
+            return response;
+        }
+        if (checkKeyRange(key)) {
+            response.setKey(key);
             synchronized (lock) {
                 logger.debug("Got the Lock");
+                String value = message.getValue();
                 // Delete
                 if (value.equals("null")) {
                     try {
                         logger.info("SERVER: Key '" + key + "' deleted '");
-                        if (deleteKV(key)) {
-                            return "DELETE_SUCCESS " + key;
+                        if (!deleteKV(key)) {
+                            logger.info(String.format("SERVER: Delete key %s not exists.", key));
+                            response.setStatus(StatusType.DELETE_ERROR);
+                            return response;
                         }
-                        logger.info(String.format("SERVER: Delete key %s not exists.", key));
-                        return "DELETE_ERROR " + key;
+                        response.setStatus(StatusType.DELETE_SUCCESS);
+                        return response;
                     } catch (Exception e) {
                         logger.error("Error deleting key '" + key + " " + e.getMessage());
-                        return "DELETE_ERROR " + key;
+                        response.setStatus(StatusType.DELETE_ERROR);
+                        return response;
                     }
                 }
+                response.setValue(value);
                 // Update
                 if (inCache(key)) {
                     logger.info("SERVER: Update cache with Key '" + key + "', Value '" + value + "'");
                     cache.updateKV(key, value);
-                    return "PUT_UPDATE " + key + " " + value;
+                    response.setStatus(StatusType.PUT_UPDATE);
+                    return response;
                 }
                 if (inStorage(key)) {
                     logger.info("SERVER: Update storage with Key '" + key + "', Value '" + value + "'");
                     try {
                         updateStorage(key, value);
-                        return "PUT_UPDATE " + key + " " + value;
+                        response.setStatus(StatusType.PUT_UPDATE);
+                        return response;
                     } catch (Exception e) {
                         logger.error("Error updating key-value pair for key '" + key + "': " + e.getMessage());
-                        return "PUT_ERROR " + key + " " + value;
+                        response.setStatus(StatusType.PUT_ERROR);
+                        return response;
                     }
                 }
 
                 //Put
-                returnString = "PUT_SUCCESS";
                 logger.info("SERVER: PUT  Key '" + key + "', Value '" + value + "'");
                 try {
                     putKV(key, value);
-                    return String.format("%s %s %s", returnString, key, value);
+                    response.setStatus(StatusType.PUT_SUCCESS);
                 } catch (Exception e) {
                     logger.error("Error putting key-value pair for key '" + key + "': " + e.toString());
-                    return "PUT_ERROR " + key + " " + value;
+                    response.setStatus(StatusType.PUT_ERROR);
+                    return response;
                 }
             }
         } else {
-            logger.error("Invalid PUT message format: " + String.join(" ", messageParts));
-            return "FAILED put request is not formatted correctly: " + String.join(" ", messageParts);
+            response.setStatus(StatusType.SERVER_NOT_RESPONSIBLE);
+            response.setMetadata(this.metadata);
         }
+        return response;
     }
 
 //    @Override
@@ -534,16 +566,26 @@ public class KVServer implements IKVServer, Runnable {
         this.address = address;
     }
 
-    public void updateMetadata(BST metadata) {this.metadata = metadata;}
+    public void updateMetadata(BST metadata) {
+        this.metadata = metadata;
+    }
 
-    public boolean getWriteLock() {return this.writeLock;}
+    public boolean getWriteLock() {
+        return this.writeLock;
+    }
 
-    public void setWriteLock(boolean flag) {this.writeLock = flag;}
+    public void setWriteLock(boolean flag) {
+        this.writeLock = flag;
+    }
+
+    public BST getMetadata() {
+        return this.metadata;
+    }
 
     private static String generateHelpString() {
         return "Usage: java KVServer [-p <port>] [-a <address>] [-d <directory>] [-l <logFile>] [-ll <logLevel>] [-c <cacheSize>] [-cs <cacheStrategy>]\n"
                 + "Options:\n"
-                + "  -b <address:port>  Address and port number of the ECS server (default: localhost:5001)\n"    
+                + "  -b <address:port>  Address and port number of the ECS server (default: localhost:5001)\n"
                 + "  -p <port>          Port number for the KVServer (default: 5000)\n"
                 + "  -a <address>       Address for the KVServer (default: localhost)\n"
                 + "  -d <directory>     Directory for storage (default: current directory)\n"

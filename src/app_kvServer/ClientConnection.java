@@ -3,8 +3,10 @@ package app_kvServer;
 import app_kvECS.ECSClient;
 import app_kvECS.ECSMessage;
 import app_kvECS.ECSMessage.ActionType;
+import shared.messages.KVMessage.StatusType;
 import org.apache.log4j.*;
 import shared.messages.KVMessage;
+import shared.messages.KVMessageImpl;
 
 import java.io.BufferedInputStream;
 import java.io.File;
@@ -84,44 +86,37 @@ public class ClientConnection implements Runnable {
         String[] range = msg.getRange();
         ECSMessage response = new ECSMessage();
         response.setAction(action);
+
+        boolean requiresWriteLock = action == ActionType.SET_WRITE_LOCK ||
+                action == ActionType.UNSET_WRITE_LOCK ||
+                action == ActionType.APPEND ||
+                action == ActionType.GET_DATA ||
+                action == ActionType.REMOVE;
+
+        if (requiresWriteLock) {
+            String writeLockError = checkWriteLockCondition(action != ActionType.UNSET_WRITE_LOCK);
+            if (writeLockError != null) {
+                response.setSuccess(false);
+                response.setErrorMessage(writeLockError);
+                sendMessage(response);
+                return;
+            }
+        }
+
         switch (action) {
             case SET_WRITE_LOCK:
-                if (kvServer.getWriteLock()) {
-                    // write lock already set
-                    response.setSuccess(false);
-                    response.setErrorMessage("Write lock already set.");
-                    break;
-                }
                 kvServer.setWriteLock(true);
                 response.setSuccess(true);
                 break;
             case UNSET_WRITE_LOCK:
-                if (!kvServer.getWriteLock()) {
-                    // write lock not set
-                    response.setSuccess(false);
-                    response.setErrorMessage("Write lock not set.");
-                    break;
-                }
                 kvServer.setWriteLock(false);
                 response.setSuccess(true);
                 break;
             case APPEND:
-                if (!kvServer.getWriteLock()) {
-                    // write lock not set
-                    response.setSuccess(false);
-                    response.setErrorMessage("Write lock not set.");
-                    break;
-                }
                 kvServer.appendDataToStorage(msg.getData());
                 response.setSuccess(true);
                 break;
             case GET_DATA:
-                if (!kvServer.getWriteLock()) {
-                    // write lock not set
-                    response.setSuccess(false);
-                    response.setErrorMessage("Write lock not set.");
-                    break;
-                }
                 if (range == null) {
                     response.setData(kvServer.getAllData());
                 } else {
@@ -135,12 +130,6 @@ public class ClientConnection implements Runnable {
                 }
                 break;
             case REMOVE:
-                if (!kvServer.getWriteLock()) {
-                    // write lock not set
-                    response.setSuccess(false);
-                    response.setErrorMessage("Write lock not set.");
-                    break;
-                }
                 if (kvServer.removeData(range[0], range[1])) {
                     response.setSuccess(true);
                 } else {
@@ -163,13 +152,38 @@ public class ClientConnection implements Runnable {
     }
 
     private void handleKVMessage(KVMessage msg) {
-
+        if (msg == null) {
+            isOpen = false;
+            return;
+        }
+        StatusType status = msg.getStatus();
+        String key = msg.getKey();
+        KVMessage response = new KVMessageImpl();
+        switch (status) {
+            case GET:
+                response = kvServer.handleGetMessage(msg);
+                break;
+            case PUT:
+                response = kvServer.handlePutMessage(msg);
+                break;
+            default:
+                logger.error("Unknown message from client: " + msg);
+        }
+        sendMessage(response);
     }
 
-    private void sendMessage(ECSMessage responseMessage) throws IOException {
-        output.writeObject(responseMessage);
-        output.flush();
+    private void sendMessage(Object message)  {
+        if (!(message instanceof ECSMessage) && !(message instanceof KVMessage)) {
+            logger.error("Unknown message type.");
+        }
+        try {
+            output.writeObject(message);
+            output.flush();
+        } catch (IOException e) {
+            logger.error("Failed to send message.");
+        }
     }
+
 
     public void close() throws IOException {
         if (isOpen) {
@@ -177,6 +191,16 @@ public class ClientConnection implements Runnable {
 //            sendMessage("DISCONNECT");
         }
     }
+
+    private String checkWriteLockCondition(boolean requireLock) {
+        if (requireLock && !kvServer.getWriteLock()) {
+            return "Write lock not set.";
+        } else if (!requireLock && kvServer.getWriteLock()) {
+            return "Write lock already set.";
+        }
+        return null; // indicates no error
+    }
+
 
     public void transferData(String address, int port) {
         kvServer.syncCacheToStorage();

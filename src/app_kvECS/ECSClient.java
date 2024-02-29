@@ -7,10 +7,8 @@ import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.security.MessageDigest;
 import java.util.*;
 
-import app_kvECS.ServerConnection;
 import app_kvServer.KVServer;
 import ecs.ECSNode;
 import ecs.IECSNode;
@@ -18,7 +16,6 @@ import shared.BST;
 import shared.messages.ECSMessage;
 import shared.messages.ECSMessage.ActionType;
 import shared.utils.HashUtils;
-import shared.utils.HashUtils.*;
 import logger.LogSetup;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;

@@ -1,21 +1,10 @@
 package app_kvECS;
 
-import app_kvECS.ECSClient;
-
 import org.apache.log4j.*;
 
 import shared.messages.ECSMessage;
-import shared.messages.KVMessage;
-
-import java.io.BufferedInputStream;
-import java.io.File;
-import java.io.FileInputStream;
 import java.net.Socket;
-import java.nio.charset.StandardCharsets;
-import java.util.zip.*;
 import java.io.*;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 
 public class ServerConnection implements Runnable{
 

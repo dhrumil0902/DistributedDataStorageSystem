@@ -428,7 +428,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
         try {
             ECSNode ecsNodeSuccessor = (ECSNode) nodes.get(successor);
             ECSNode ecsNewNode = (ECSNode) nodes.get(newNode);
-            logger.info("(In 'getKVPairsToTransfer'): Sending Messahe tp Remove Keys to Node: " + ecsNodeSuccessor.getNodeName() + " range: " + minRange + "," + maxRange);
+            logger.info("(In 'getKVPairsToTransfer'): Sending message to remove keys to node: " + ecsNodeSuccessor.getNodeName() + " range: " + minRange + "," + maxRange);
             ECSMessage ecsMessage = sendMessage(ecsNodeSuccessor, new ECSMessage(ActionType.REMOVE, true,
                     null, new String[]{minRange, minRange}, nodes));
             if (ecsMessage.success) {

@@ -260,6 +260,7 @@ public class KVServer implements IKVServer, Runnable {
     }
 
     public boolean removeData(String minVal, String maxVal) {
+        logger.info("In removeData function in: " + port);
         try {
             storage.removeData(minVal,  maxVal);
             return true;

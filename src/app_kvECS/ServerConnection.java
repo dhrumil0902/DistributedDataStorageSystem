@@ -2,6 +2,7 @@ package app_kvECS;
 
 import app_kvECS.ECSClient;
 import app_kvECS.ECSMessage;
+import ecs.IECSNode;
 import org.apache.log4j.*;
 import shared.messages.KVMessage;
 
@@ -99,7 +100,6 @@ public class ServerConnection implements Runnable{
 		}
 		sendMessage(response);
 	}
-
 	private void sendMessage(ECSMessage responseMessage) throws IOException {
 		output.writeObject(responseMessage);
 		output.flush();

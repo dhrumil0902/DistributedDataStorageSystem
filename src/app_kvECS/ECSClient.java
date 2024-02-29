@@ -370,7 +370,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
     }
 
     public ECSMessage onMessageReceived(String message, int port, String address) {
-        if (message.compareTo("New Node") ==0) {
+        if (message.compareTo("New Node") == 0) {
             String hashCode = HashUtils.getHash(address + ":" + port);
             String[] hashRange = {getStartNodeHash(hashCode), hashCode};
             ECSNode ecsNode = new ECSNode(address + port, address,port,hashRange);
@@ -381,11 +381,21 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
                 ECSNode successor = (ECSNode) nodes.get(getSuccessor(hashCode));
                 successor.getNodeHashRange()[0] = hashCode;
                 logger.info("Added new node to the bst, current state of bst: " + nodes.print());
-                return new ECSMessage(ActionType.APPEND, true, kvToTransfer,null, nodes);
+                try {
+                    sendMessage(ecsNode, new ECSMessage(ActionType.APPEND, true, kvToTransfer,null, nodes));
+                    sendMessage(successor, new ECSMessage(ActionType.REMOVE, true, null, hashRange, nodes));
+                    sendMessage(successor, new ECSMessage(ActionType.UNSET_WRITE_LOCK, true, null,null, nodes));
+                } catch (Exception e) {
+                    logger.error(e);
+                }
+                updateAllNodesMetaData();
+                return new ECSMessage(ActionType.UPDATE_METADATA, true, null,null, nodes);
             }
             logger.info("Added new node to the bst, current state of bst: " + nodes.print());
-            return new ECSMessage(ActionType.APPEND, true,kvToTransfer,null, nodes);
+            updateAllNodesMetaData();
+            return new ECSMessage(ActionType.UPDATE_METADATA, true,kvToTransfer,null, nodes);
         }
+        updateAllNodesMetaData();
         return new ECSMessage(ActionType.APPEND, true,null,null, nodes);
     }
 
@@ -429,8 +439,14 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
         try {
             ECSNode ecsNodeSuccessor = (ECSNode) nodes.get(successor);
             ECSNode ecsNewNode = (ECSNode) nodes.get(newNode);
-            logger.info("(In 'getKVPairsToTransfer'): Sending Messahe tp Remove Keys to Node: " + ecsNodeSuccessor.getNodeName() + " range: " + minRange + "," + maxRange);
-            ECSMessage ecsMessage = sendMessage(ecsNodeSuccessor, new ECSMessage(ActionType.REMOVE, true,
+            logger.info("(In 'getKVPairsToTransfer'): Sending Message tp Remove Keys to Node: " + ecsNodeSuccessor.getNodeName() + " range: " + minRange + "," + maxRange);
+            ECSMessage ecsMessage = sendMessage(ecsNodeSuccessor, new ECSMessage(ActionType.SET_WRITE_LOCK, true,
+                    null, new String[]{minRange, minRange}, nodes));
+            if(!ecsMessage.success){
+                logger.error("Received error while setting write lock on node: " + ecsNodeSuccessor.getNodeName() + ". Error: " + ecsMessage.getErrorMessage());
+                return null;
+            }
+            ecsMessage = sendMessage(ecsNodeSuccessor, new ECSMessage(ActionType.GET_DATA, true,
                     null, new String[]{minRange, minRange}, nodes));
             if (ecsMessage.success) {
                 return ecsMessage.data;
@@ -443,6 +459,18 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
         return null;
     }
 
+    public void updateAllNodesMetaData() {
+        logger.info("Starting update of meta data of all nodes ...");
+        for (ECSNode node : nodes.values())
+        {
+            try {
+                sendMessage(node, new ECSMessage(ActionType.UPDATE_METADATA, true, null,null, nodes));
+            } catch (Exception e) {
+                logger.error("Could not successfully update the metadata of all nodes, error: " + e);
+            }
+        }
+        logger.info("Finished updating meta data of all nodes ...");
+    }
 public ECSMessage sendMessage(ECSNode node, ECSMessage msg) throws Exception {
     try (Socket ECSSocket = new Socket(node.getNodeHost(), node.getNodePort())) {
         // Setup input and output streams

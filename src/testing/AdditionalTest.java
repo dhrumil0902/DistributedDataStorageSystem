@@ -51,11 +51,28 @@ public class AdditionalTest extends TestCase {
         public void testAddNode() {
             try {
                 new LogSetup("test2.log", Level.ALL);
+                System.out.println("here");
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
             ECSClient client = new ECSClient("localhost",5100);
-            KVServer server = new KVServer("localhost", 5100, "localhost", 6700, 0, "None", "/homes/p/pate1385/ece419/ms2-group-38-good/src/testing/AdditionalTest.java");
+            KVServer server = new KVServer("localhost", 5100, "localhost", 3710, 0, "None", System.getProperty("user.dir"));
+            try {
+                server.putKV("this", "val_test");
+                server.putKV("dsdaslskdskldasklasclsalcss", "val_test");
+                server.putKV("ewdfkdwloejwdflcdw", "val_test");
+                server.putKV("ranyyyyyyyyyyyyyyyyyyyydom", "val_test");
+                server.putKV("vfdfvfuuuuuuuuuuuuuuuuuuv", "val_test");
+                server.putKV("dfvddfvkkuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu", "val_test");
+                server.putKV("dvfdfvdfvdyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyf", "val_test");
+                server.putKV("vdfvfffffffffffffffffffffffdfvdfv", "val_test");
+                server.putKV("dfvddfvkkuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu", "val_test");
+                server.putKV("dvfdfvdfvdyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyf", "val_test");
+                server.putKV("vdfvfffffffffffffffffffffffdfvdfv", "val_test");
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+            KVServer secondserver = new KVServer("localhost", 5100, "localhost", 8710, 0, "None", System.getProperty("user.dir"));
             System.out.println("done");
         }
         @Test

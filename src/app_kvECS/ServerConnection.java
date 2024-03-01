@@ -95,6 +95,19 @@ public class ServerConnection implements Runnable{
 					response.setSuccess(false);
 				}
 				break;
+			case DELETE:
+				if (msg.getServerInfo() != null && msg.getServerInfo().length == 2) {
+					String address = msg.getServerInfo()[0];
+					String port = (msg.getServerInfo()[1]);
+					try {
+						ecsServer.removeNode(address + port, msg.getData());
+					} catch (Exception e) {
+						throw new RuntimeException(e);
+					}
+				} else {
+					logger.error("Server info (address and port) not properly set in ECSMessage.");
+				}
+
 			default:
 				logger.error("Unknown action.");
 		}

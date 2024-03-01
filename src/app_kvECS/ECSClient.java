@@ -298,14 +298,14 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
     public boolean removeNodes(Collection<String> nodeNames) {
         for (String nodeName : nodeNames){
             try {
-                removeNode(nodeName);
+                //removeNode(nodeName);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
         }
         return true;
     }
-    public boolean removeNode(String nodeName) throws Exception {
+    public boolean removeNode(String nodeName, List<String> dataToTransfer ) throws Exception {
         ECSNode removeNode = null;
         String removeNodeHash = null;
         for (String keyNode : nodes.keys()){
@@ -321,18 +321,16 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
         }
 
         if (nodes.size() == 1){
-            ECSMessage msg = sendMessage(removeNode, new ECSMessage(ActionType.DELETE, true, null, null, nodes));
             nodes.delete(removeNodeHash);
             updateAllNodesMetaData();
-            if (!msg.success){
-                return false;
-            }
             return true;
         }
 
         String hashOfSuccessor = getSuccessor(removeNodeHash);
         ECSNode successorNode = (ECSNode) nodes.get(hashOfSuccessor);
-        transferDataForRemovedNode(removeNode, successorNode);
+        sendMessage(successorNode,new ECSMessage(ActionType.SET_WRITE_LOCK, true,null,null,nodes));
+        sendMessage(successorNode,new ECSMessage(ActionType.APPEND, true,dataToTransfer,null,nodes));
+        sendMessage(successorNode,new ECSMessage(ActionType.UNSET_WRITE_LOCK, true,null,null,nodes));
         successorNode.getNodeHashRange()[0] = removeNode.getNodeHashRange()[0];
         nodes.delete(removeNodeHash);
         updateAllNodesMetaData();

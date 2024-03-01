@@ -296,10 +296,16 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
 
     @Override
     public boolean removeNodes(Collection<String> nodeNames) {
-        // TODO
-        return false;
+        for (String nodeName : nodeNames){
+            try {
+                removeNode(nodeName);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+        return true;
     }
-    public boolean removeNode(String nodeName) {
+    public boolean removeNode(String nodeName) throws Exception {
         ECSNode removeNode = null;
         String removeNodeHash = null;
         for (String keyNode : nodes.keys()){
@@ -315,36 +321,33 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
         }
 
         if (nodes.size() == 1){
+            ECSMessage msg = sendMessage(removeNode, new ECSMessage(ActionType.DELETE, true, null, null, nodes));
             nodes.delete(removeNodeHash);
+            updateAllNodesMetaData();
+            if (!msg.success){
+                return false;
+            }
             return true;
         }
+
         String hashOfSuccessor = getSuccessor(removeNodeHash);
         ECSNode successorNode = (ECSNode) nodes.get(hashOfSuccessor);
         transferDataForRemovedNode(removeNode, successorNode);
         successorNode.getNodeHashRange()[0] = removeNode.getNodeHashRange()[0];
-        try {
-            Files.deleteIfExists(Paths.get(removeNode.dBStoragePath,"data.txt"));
-            Files.delete(Paths.get(removeNode.dBStoragePath));
-        }
-        catch (Exception ex)  {
-            System.out.println(Arrays.toString(ex.getStackTrace()));
-        }
         nodes.delete(removeNodeHash);
+        updateAllNodesMetaData();
         return true;
     }
 
     private void transferDataForRemovedNode(ECSNode removeNode, ECSNode successorNode) {
-        Path filePathSuccessor = Paths.get(successorNode.dBStoragePath, "data.txt");
-        Path filePathRemoveNode = Paths.get(removeNode.dBStoragePath, "data.txt");
         try{
-            List<String> removeNodeLines = Files.readAllLines(filePathRemoveNode);
-
-            BufferedWriter writer = new BufferedWriter(new FileWriter(String.valueOf(filePathSuccessor), true));
-            for (String line : removeNodeLines) {
-                writer.write(line);
-                writer.newLine();
+            ECSMessage msg = sendMessage(removeNode, new ECSMessage(ActionType.GET_DATA, true, null, null, nodes));
+            if (!msg.success){
+                return;
             }
-            writer.close();
+            msg.setAction(ActionType.APPEND);
+            sendMessage(successorNode,msg);
+            sendMessage(removeNode, new ECSMessage(ActionType.DELETE, true, null, null, nodes));
 
         }
         catch (Exception ex) {
@@ -382,7 +385,10 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
                 successor.getNodeHashRange()[0] = hashCode;
                 logger.info("Added new node to the bst, current state of bst: " + nodes.print());
                 try {
+                    logger.info("Transferring following data: " + kvToTransfer);
+                    sendMessage(ecsNode, new ECSMessage(ActionType.SET_WRITE_LOCK, true, null,null, nodes));
                     sendMessage(ecsNode, new ECSMessage(ActionType.APPEND, true, kvToTransfer,null, nodes));
+                    sendMessage(ecsNode, new ECSMessage(ActionType.UNSET_WRITE_LOCK, true, null,null, nodes));
                     sendMessage(successor, new ECSMessage(ActionType.REMOVE, true, null, hashRange, nodes));
                     sendMessage(successor, new ECSMessage(ActionType.UNSET_WRITE_LOCK, true, null,null, nodes));
                 } catch (Exception e) {
@@ -439,15 +445,15 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
         try {
             ECSNode ecsNodeSuccessor = (ECSNode) nodes.get(successor);
             ECSNode ecsNewNode = (ECSNode) nodes.get(newNode);
-            logger.info("(In 'getKVPairsToTransfer'): Sending Message tp Remove Keys to Node: " + ecsNodeSuccessor.getNodeName() + " range: " + minRange + "," + maxRange);
             ECSMessage ecsMessage = sendMessage(ecsNodeSuccessor, new ECSMessage(ActionType.SET_WRITE_LOCK, true,
                     null, new String[]{minRange, minRange}, nodes));
             if(!ecsMessage.success){
                 logger.error("Received error while setting write lock on node: " + ecsNodeSuccessor.getNodeName() + ". Error: " + ecsMessage.getErrorMessage());
                 return null;
             }
+            logger.info("(In 'getKVPairsToTransfer'): Sending Message tp GET_DATA Keys to Node: " + ecsNodeSuccessor.getNodeName() + " range: " + minRange + "," + maxRange);
             ecsMessage = sendMessage(ecsNodeSuccessor, new ECSMessage(ActionType.GET_DATA, true,
-                    null, new String[]{minRange, minRange}, nodes));
+                    null, new String[]{minRange, maxRange}, nodes));
             if (ecsMessage.success) {
                 return ecsMessage.data;
             }
@@ -522,10 +528,25 @@ public ECSMessage sendMessage(ECSNode node, ECSMessage msg) throws Exception {
     public static void main(String[] args) throws IOException {
         new LogSetup("test2.log", Level.ALL);
         new ECSClient("127.0.0.1", 5100);
-        KVServer server = new KVServer("localhost", 5100, "localhost", 6710, 0, "None", System.getProperty("user.dir"));
+        KVServer server = new KVServer("localhost", 5100, "localhost", 4710, 0, "None", System.getProperty("user.dir"));
+        try {
+            server.putKV("this", "val_test");
+            server.putKV("dsdaslskdskldasklasclsalcss", "val_test");
+            server.putKV("ewdfkdwloejwdflcdw", "val_test");
+            server.putKV("ranyyyyyyyyyyyyyyyyyyyydom", "val_test");
+            server.putKV("vfdfvfuuuuuuuuuuuuuuuuuuv", "val_test");
+            server.putKV("dfvddfvkkuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu", "val_test");
+            server.putKV("dvfdfvdfvdyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyf", "val_test");
+            server.putKV("vdfvfffffffffffffffffffffffdfvdfv", "val_test");
+            server.putKV("dfvddfvkkuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu", "val_test");
+            server.putKV("dvfdfvdfvdyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyf", "val_test");
+            server.putKV("vdfvfffffffffffffffffffffffdfvdfv", "val_test");
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
         //server = new KVServer("localhost", 5100, "localhost", 6700, 0, "None", System.getProperty("user.dir"));
+        logger.info(server.getAllData());
         while(true){
-
         }
     }
 

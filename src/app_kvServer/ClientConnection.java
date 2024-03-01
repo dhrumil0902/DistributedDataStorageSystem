@@ -132,10 +132,11 @@ public class ClientConnection implements Runnable {
                 if (range == null) {
                     response.setData(kvServer.getAllData());
                 } else {
+                    logger.info("Setting data in response of port: " + kvServer.getPort());
                     response.setData(kvServer.getData(range[0], range[1]));
                 }
                 if (response.getData() != null) {
-                    logger.info("Command GET_DATA successfully returning in: " + kvServer.getPort());
+                    logger.info("Command GET_DATA successfully returning in: " + kvServer.getPort() + "'sending data of size: " + response.getData().size());
                     response.setSuccess(true);
                 } else {
                     response.setSuccess(false);

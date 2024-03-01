@@ -174,6 +174,7 @@ public class KVServer implements IKVServer, Runnable {
 
     @Override
     public void putKV(String key, String value) throws Exception {
+        logger.info("Storage dir: " + getStoragePath());
         logger.info(String.format("PutKV: %s %s", key, value));
         // Put kv to storage
         if (cache == null) {

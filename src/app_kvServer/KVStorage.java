@@ -140,10 +140,10 @@ public class KVStorage {
     }
 
     public synchronized List<String> getData(String minVal, String maxVal) throws IOException{
-        BigInteger bottom = new BigInteger(minVal, 16);
-        BigInteger top = new BigInteger(maxVal, 16);
+        String bottom = minVal;
+        String top = maxVal;
         List<String> result = new ArrayList<>();
-
+        logger.info("Parsing data, minval: " + minVal + ", maxVal: " + maxVal);
         try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
             String line;
             while ((line = reader.readLine()) != null) {
@@ -152,16 +152,17 @@ public class KVStorage {
 
                 String key = parts[0];
                 String hashHex = HashUtils.getHash(key);
-                BigInteger hashValue = new BigInteger(hashHex, 16);
-
+                logger.info(key + " " + hashHex);
                 if (top.compareTo(bottom) > 0) {
                     // Normal range: bottom <= hashValue <= top
-                    if (hashValue.compareTo(bottom) >= 0 && hashValue.compareTo(top) <= 0) {
+                    if (hashHex.compareTo(bottom) >= 0 && hashHex.compareTo(top) <= 0) {
                         result.add(line);
+                        logger.info("Added above key to result");
                     }
-                } else if (top.compareTo(bottom) < 0) {
+                } else {
                     // Corner range: hashValue <= top OR hashValue >= bottom
-                    if (hashValue.compareTo(top) <= 0 || hashValue.compareTo(bottom) >= 0) {
+                    if (hashHex.compareTo(top) <= 0 || hashHex.compareTo(bottom) >= 0) {
+                        logger.info("Added above key to result");
                         result.add(line);
                     }
                 }

@@ -344,13 +344,34 @@ public class KVServer implements IKVServer, Runnable {
                     "Unable to close socket on port: " + port, e);
         }
     }
+    private void disconnectFromCentralServer() {
 
+        try (Socket ECSSocket = new Socket(ecsAddress, ecsPort)) {
+            // Setup input and output streams
+            ObjectOutputStream out = new ObjectOutputStream(ECSSocket.getOutputStream());
+            ObjectInputStream in = new ObjectInputStream(ECSSocket.getInputStream());
+            ECSMessage msg = new ECSMessage();
+            msg.setData(getAllData());
+            msg.setAction(ActionType.DELETE);
+            msg.setServerInfo(address, port);
+            if (metadata.size() > 1){
+                logger.info("Removing all the data from: " + port);
+                removeData("00000000000000000000000000000000","FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
+            }
+            out.writeObject(msg);
+            out.flush();
+            logger.info("Informing ECSClient to delete server: " + port);
+        } catch (IOException e) {
+            logger.error("Failed to connect to the central server.", e);
+        }
+    }
     @Override
     public void close() {
         logger.info("Closing server.");
         running = false;
         syncCacheToStorage();
         try {
+            disconnectFromCentralServer();
             serverSocket.close();
             for (ClientConnection connection : clientConnections) {
                 connection.close();

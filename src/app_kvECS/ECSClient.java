@@ -322,7 +322,6 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
 
         if (nodes.size() == 1){
             nodes.delete(removeNodeHash);
-            updateAllNodesMetaData();
             return true;
         }
 
@@ -334,6 +333,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
         successorNode.getNodeHashRange()[0] = removeNode.getNodeHashRange()[0];
         nodes.delete(removeNodeHash);
         updateAllNodesMetaData();
+        logger.info("Removed a node from the bst, current state of bst: " + nodes.print());
         return true;
     }
 

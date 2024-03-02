@@ -9,6 +9,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.util.*;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import app_kvECS.ECSMessage.ActionType;
 import app_kvECS.ServerConnection;
@@ -32,6 +34,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
     private String address;
     private List<ServerConnection> clientConnections = new ArrayList<ServerConnection>();
     UniqueRandomNumberGenerator randomNumberGen = new UniqueRandomNumberGenerator();
+    private final Lock lock = new ReentrantLock();
 
     public ECSClient(String address, int port) {
 
@@ -303,35 +306,37 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
         return true;
     }
     public boolean removeNode(String nodeName, List<String> dataToTransfer ) throws Exception {
-        ECSNode removeNode = null;
-        String removeNodeHash = null;
-        for (String keyNode : nodes.keys()){
-            ECSNode ecsNode = (ECSNode) nodes.get(keyNode);
-            if (ecsNode.getNodeName().compareTo(nodeName) == 0){
-                removeNode = ecsNode;
-                removeNodeHash = keyNode;
+        synchronized(lock) {
+            ECSNode removeNode = null;
+            String removeNodeHash = null;
+            for (String keyNode : nodes.keys()) {
+                ECSNode ecsNode = (ECSNode) nodes.get(keyNode);
+                if (ecsNode.getNodeName().compareTo(nodeName) == 0) {
+                    removeNode = ecsNode;
+                    removeNodeHash = keyNode;
+                }
             }
-        }
 
-        if (removeNode == null){
-            return false;
-        }
+            if (removeNode == null) {
+                return false;
+            }
 
-        if (nodes.size() == 1){
+            if (nodes.size() == 1) {
+                nodes.delete(removeNodeHash);
+                return true;
+            }
+
+            String hashOfSuccessor = getSuccessor(removeNodeHash);
+            ECSNode successorNode = (ECSNode) nodes.get(hashOfSuccessor);
+            sendMessage(successorNode, new ECSMessage(ActionType.SET_WRITE_LOCK, true, null, null, nodes));
+            sendMessage(successorNode, new ECSMessage(ActionType.APPEND, true, dataToTransfer, null, nodes));
+            sendMessage(successorNode, new ECSMessage(ActionType.UNSET_WRITE_LOCK, true, null, null, nodes));
+            successorNode.getNodeHashRange()[0] = removeNode.getNodeHashRange()[0];
             nodes.delete(removeNodeHash);
+            updateAllNodesMetaData();
+            logger.info("Removed a node from the bst, current state of bst: " + nodes.print());
             return true;
         }
-
-        String hashOfSuccessor = getSuccessor(removeNodeHash);
-        ECSNode successorNode = (ECSNode) nodes.get(hashOfSuccessor);
-        sendMessage(successorNode,new ECSMessage(ActionType.SET_WRITE_LOCK, true,null,null,nodes));
-        sendMessage(successorNode,new ECSMessage(ActionType.APPEND, true,dataToTransfer,null,nodes));
-        sendMessage(successorNode,new ECSMessage(ActionType.UNSET_WRITE_LOCK, true,null,null,nodes));
-        successorNode.getNodeHashRange()[0] = removeNode.getNodeHashRange()[0];
-        nodes.delete(removeNodeHash);
-        updateAllNodesMetaData();
-        logger.info("Removed a node from the bst, current state of bst: " + nodes.print());
-        return true;
     }
 
     private void transferDataForRemovedNode(ECSNode removeNode, ECSNode successorNode) {
@@ -363,41 +368,42 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
 
     @Override
     public IECSNode getNodeByKey(String Key) {
-        // TODO
-        return null;
+        return nodes.get(Key);
     }
 
     public ECSMessage onMessageReceived(String message, int port, String address) {
-        if (message.compareTo("New Node") == 0) {
-            String hashCode = HashUtils.getHash(address + ":" + port);
-            String[] hashRange = {getStartNodeHash(hashCode), hashCode};
-            ECSNode ecsNode = new ECSNode(address + port, address,port,hashRange);
-            nodes.put(hashCode, ecsNode);
-            List<String> kvToTransfer = new ArrayList<String>();
-            if (nodes.size() > 1) {
-                kvToTransfer = getKVPairsToTransfer(hashCode, getSuccessor(hashCode));
-                ECSNode successor = (ECSNode) nodes.get(getSuccessor(hashCode));
-                successor.getNodeHashRange()[0] = hashCode;
-                logger.info("Added new node to the bst, current state of bst: " + nodes.print());
-                try {
-                    logger.info("Transferring following data: " + kvToTransfer);
-                    sendMessage(ecsNode, new ECSMessage(ActionType.SET_WRITE_LOCK, true, null,null, nodes));
-                    sendMessage(ecsNode, new ECSMessage(ActionType.APPEND, true, kvToTransfer,null, nodes));
-                    sendMessage(ecsNode, new ECSMessage(ActionType.UNSET_WRITE_LOCK, true, null,null, nodes));
-                    sendMessage(successor, new ECSMessage(ActionType.REMOVE, true, null, hashRange, nodes));
-                    sendMessage(successor, new ECSMessage(ActionType.UNSET_WRITE_LOCK, true, null,null, nodes));
-                } catch (Exception e) {
-                    logger.error(e);
+        synchronized(lock) {
+            if (message.compareTo("New Node") == 0) {
+                String hashCode = HashUtils.getHash(address + ":" + port);
+                String[] hashRange = {getStartNodeHash(hashCode), hashCode};
+                ECSNode ecsNode = new ECSNode(address + port, address, port, hashRange);
+                nodes.put(hashCode, ecsNode);
+                List<String> kvToTransfer = new ArrayList<String>();
+                if (nodes.size() > 1) {
+                    kvToTransfer = getKVPairsToTransfer(hashCode, getSuccessor(hashCode));
+                    ECSNode successor = (ECSNode) nodes.get(getSuccessor(hashCode));
+                    successor.getNodeHashRange()[0] = hashCode;
+                    logger.info("Added new node to the bst, current state of bst: " + nodes.print());
+                    try {
+                        logger.info("Transferring following data: " + kvToTransfer);
+                        sendMessage(ecsNode, new ECSMessage(ActionType.SET_WRITE_LOCK, true, null, null, nodes));
+                        sendMessage(ecsNode, new ECSMessage(ActionType.APPEND, true, kvToTransfer, null, nodes));
+                        sendMessage(ecsNode, new ECSMessage(ActionType.UNSET_WRITE_LOCK, true, null, null, nodes));
+                        sendMessage(successor, new ECSMessage(ActionType.REMOVE, true, null, hashRange, nodes));
+                        sendMessage(successor, new ECSMessage(ActionType.UNSET_WRITE_LOCK, true, null, null, nodes));
+                    } catch (Exception e) {
+                        logger.error(e);
+                    }
+                    updateAllNodesMetaData();
+                    return new ECSMessage(ActionType.UPDATE_METADATA, true, null, null, nodes);
                 }
+                logger.info("Added new node to the bst, current state of bst: " + nodes.print());
                 updateAllNodesMetaData();
-                return new ECSMessage(ActionType.UPDATE_METADATA, true, null,null, nodes);
+                return new ECSMessage(ActionType.UPDATE_METADATA, true, kvToTransfer, null, nodes);
             }
-            logger.info("Added new node to the bst, current state of bst: " + nodes.print());
             updateAllNodesMetaData();
-            return new ECSMessage(ActionType.UPDATE_METADATA, true,kvToTransfer,null, nodes);
+            return new ECSMessage(ActionType.APPEND, true, null, null, nodes);
         }
-        updateAllNodesMetaData();
-        return new ECSMessage(ActionType.APPEND, true,null,null, nodes);
     }
 
  //   public BST addNode(int port, String address) {
@@ -592,8 +598,13 @@ public ECSMessage sendMessage(ECSNode node, ECSMessage msg) throws Exception {
         }
     }
 
-    private void close() {
-        logger.info("Closing ECSClient");
+    public void close() {
+        try {
+            serverSocket.close();
+            logger.info("Successfully closed ECSClient");
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private static String generateHelpString() {

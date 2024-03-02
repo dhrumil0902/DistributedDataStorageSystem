@@ -5,6 +5,7 @@ import ecs.ECSNode;
 import ecs.IECSNode;
 import logger.LogSetup;
 import org.apache.log4j.Level;
+import org.junit.Assert;
 import org.junit.Test;
 import app_kvECS.ECSClient;
 import junit.framework.TestCase;
@@ -16,79 +17,221 @@ import java.util.List;
 
 public class AdditionalTest extends TestCase {
 
-	@Test
-    public void testBytesToHex() {
-        byte[] byteArray = {0x0A, 0x1F, 0x2B, (byte) 0xFF}; // Example byte array
-         ECSClient client = new ECSClient("t", 6);
-         String temp = HashUtils.bytesToHex(byteArray);
-
-         String c1 = "0b1";
-         String c2 = "0b2";
-
-         if (c1.compareTo(c2) > 0)
-         {
-             System.out.println(c1 + " is greater");
-         }
-         else{
-             System.out.println(c2 + " is greater");
-        }
-        String temp1 = HashUtils.getHash("127.8.9:5500");
+    @Test
+    public void testByteToHex() {
+        byte[] byteArray = {0x0A, 0x1F, 0x2B, (byte) 0xFF};
+        String expectedResult = "0a1f2bff";
+        String actualResult = HashUtils.bytesToHex(byteArray);
+        assertEquals(expectedResult, actualResult);
     }
 
     @Test
-    public void addServer(){
+    public void testGetHash() {
+        String key = "testKey";
+        String expectedResult = "24afda34e3f74e54b61a8e4cbe921650";
+        String actualResult = HashUtils.getHash(key);
+        assertEquals(expectedResult, actualResult);
+    }
+
+    @Test
+    public void testCheckHashRangeofOneServer() {
         try {
             new LogSetup("test2.log", Level.ALL);
+            ECSClient client = new ECSClient("localhost", 5101);
+            KVServer server = new KVServer("localhost", 5101, "localhost", 5710, 0, "None", System.getProperty("user.dir"));
+            Thread.sleep(1000);
+            assertEquals(1, client.nodes.size());
+            client.nodes.values().iterator().next().getNodeHashRange();
+            assertEquals(client.nodes.values().iterator().next().getNodeHashRange()[0], client.nodes.values().iterator().next().getNodeHashRange()[1]);
+            server.close();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Test
+    public void testHashRangeUpdateForTwoServers() {
+        try {
+            new LogSetup("test2.log", Level.ALL);
+            ECSClient client = new ECSClient("localhost", 5110);
+            KVServer server = new KVServer("localhost", 5110, "localhost", 5710, 0, "None", System.getProperty("user.dir"));
+            KVServer server2 = new KVServer("localhost", 5110, "localhost", 5717, 0, "None", System.getProperty("user.dir"));
+
+            Thread.sleep(1000);
+            assertEquals(2, client.nodes.size());
+            client.nodes.values().iterator().next().getNodeHashRange();
+            assertEquals(client.getNodeByKey(client.nodes.min()).getNodeHashRange()[0], client.getNodeByKey(client.nodes.max()).getNodeHashRange()[1]);
+            server.close();
+            Thread.sleep(1000);
+            server2.close();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Test
+    public void testHashRangeUpdateOnServerDeletion() {
+        try {
+            new LogSetup("test2.log", Level.ALL);
+            ECSClient client = new ECSClient("localhost", 5111);
+            KVServer server = new KVServer("localhost", 5111, "localhost", 5810, 0, "None", System.getProperty("user.dir"));
+            KVServer server2 = new KVServer("localhost", 5111, "localhost", 5817, 0, "None", System.getProperty("user.dir"));
+            Thread.sleep(1000);
+            server.close();
+            Thread.sleep(1000);
+            assertEquals(1, client.nodes.size());
+            client.nodes.values().iterator().next().getNodeHashRange();
+            assertEquals(client.getNodeByKey(client.nodes.min()).getNodeHashRange()[0], client.getNodeByKey(client.nodes.min()).getNodeHashRange()[1]);
+            Thread.sleep(1000);
+            server2.close();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Test
+    public void testConnectingServerToECSCleint() {
+        try {
+            new LogSetup("test2.log", Level.ALL);
+            ECSClient client = new ECSClient("localhost", 5201);
+            KVServer server = new KVServer("localhost", 5201, "localhost", 5910, 0, "None", System.getProperty("user.dir"));
+            Thread.sleep(1000);
+            assertEquals(1, client.nodes.size());
+            server.close();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Test
+    public void testAddingTwoServersToECSCleint() {
+        try {
+            new LogSetup("test2.log", Level.ALL);
+            System.out.println("here");
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        ECSClient client = new ECSClient("localhost",5100);
-        KVServer server = new KVServer("localhost", 5100, "localhost", 6700, 0, "None", "/homes/p/pate1385/ece419/ms2-group-38-good/src/testing/AdditionalTest.java");
-        System.out.println("done");
+        ECSClient client = new ECSClient("localhost", 5100);
+        KVServer server = new KVServer("localhost", 5100, "localhost", 5710, 0, "None", System.getProperty("user.dir"));
+        KVServer server2 = new KVServer("localhost", 5100, "localhost", 5711, 0, "None", System.getProperty("user.dir"));
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        assertEquals(2, client.nodes.size());
     }
 
-        @Test
-        public void testAddNode() {
-            try {
-                new LogSetup("test2.log", Level.ALL);
-                System.out.println("here");
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-            ECSClient client = new ECSClient("localhost",5100);
-            KVServer server = new KVServer("localhost", 5100, "localhost", 3710, 0, "None", System.getProperty("user.dir"));
-            try {
-                server.putKV("this", "val_test");
-                server.putKV("dsdaslskdskldasklasclsalcss", "val_test");
-                server.putKV("ewdfkdwloejwdflcdw", "val_test");
-                server.putKV("ranyyyyyyyyyyyyyyyyyyyydom", "val_test");
-                server.putKV("vfdfvfuuuuuuuuuuuuuuuuuuv", "val_test");
-                server.putKV("dfvddfvkkuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu", "val_test");
-                server.putKV("dvfdfvdfvdyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyf", "val_test");
-                server.putKV("vdfvfffffffffffffffffffffffdfvdfv", "val_test");
-                server.putKV("dfvddfvkkuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu", "val_test");
-                server.putKV("dvfdfvdfvdyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyf", "val_test");
-                server.putKV("vdfvfffffffffffffffffffffffdfvdfv", "val_test");
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-            KVServer secondserver = new KVServer("localhost", 5100, "localhost", 8710, 0, "None", System.getProperty("user.dir"));
-            System.out.println("done");
+    @Test
+    public void testTransferOfData() {
+        try {
+            new LogSetup("test2.log", Level.ALL);
+            System.out.println("here");
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
-        @Test
-        public void testGetNodeHashStartRange() {
-            ECSClient client = new ECSClient("7", 7);
-            client.nodes.put("0000000000000600000000001", null);
-            String tmep = client.getStartNodeHash("0070000000000600000000001");
+        ECSClient client = new ECSClient("localhost", 5103);
+        KVServer server = new KVServer("localhost", 5103, "localhost", 5710, 0, "None", System.getProperty("user.dir"));
+        try {
+            server.putKV("testkey", "testvalue");
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        KVServer server2 = new KVServer("localhost", 5103, "localhost", 5711, 0, "None", System.getProperty("user.dir"));
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        server.close();
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        try {
+            assertEquals("testvalue", server2.getKV("testkey"));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 
-            client.nodes.put("0006000000000000000200000", null);
-            tmep = client.getStartNodeHash("0000000000000000000000001");
-            client.nodes.put("0000000000000000000000300", null);
-            tmep = client.getStartNodeHash("0000000000000000000000001");
-            client.nodes.put("0000004000000000000000000", null);
-            tmep = client.getStartNodeHash("0000000000000000000000001");
-            client.nodes.put("0500000000000000000000001", null);
-            tmep = client.getStartNodeHash("0000000000000000000000001");
-            client.addNode("temp", 56);
+    @Test
+    public void testRemovingServersFromECSCleint() {
+        try {
+            new LogSetup("test2.log", Level.ALL);
+            System.out.println("here");
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
+        ECSClient client = new ECSClient("localhost", 5105);
+        KVServer server = new KVServer("localhost", 5105, "localhost", 5710, 0, "None", System.getProperty("user.dir"));
+        KVServer server2 = new KVServer("localhost", 5105, "localhost", 5711, 0, "None", System.getProperty("user.dir"));
+        try {
+            Thread.sleep(1000);
+            assertEquals(2, client.nodes.size());
+            server.close();
+            Thread.sleep(1000);
+            assertEquals(1, client.nodes.size());
+            server2.close();
+            Thread.sleep(1000);
+            assertEquals(0, client.nodes.size());
+        }
+        catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+    }
+    @Test
+    public void testPersistentStorage() {
+        try {
+            new LogSetup("test2.log", Level.ALL);
+            System.out.println("here");
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        ECSClient client = new ECSClient("localhost", 5408);
+        KVServer server = new KVServer("localhost", 5408, "localhost", 5716, 0, "None", System.getProperty("user.dir"));
+        try {
+            server.putKV("testkey", "testvalue");
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        KVServer server2 = new KVServer("localhost", 5408, "localhost", 5715, 0, "None", System.getProperty("user.dir"));
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        server.close();
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        server.removeData("00000000000000000000000000000000","FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
+        try {
+            assertEquals("testvalue", server2.getKV("testkey"));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+        server2.close();
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        server2 = new KVServer("localhost", 5108, "localhost", 5711, 0, "None", System.getProperty("user.dir"));
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        try {
+            assertEquals("testvalue", server2.getKV("testkey"));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
 }

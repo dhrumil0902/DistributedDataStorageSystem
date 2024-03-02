@@ -171,7 +171,14 @@ public class ClientConnection implements Runnable {
                     response.setStatus(StatusType.SERVER_STOPPED);
                     break;
                 }
-                    response = kvServer.handlePutMessage(msg);
+                response = kvServer.handlePutMessage(msg);
+                break;
+            case KEYRANGE:
+                if (!kvServer.checkRegisterStatus()) {
+                    response.setStatus(StatusType.SERVER_STOPPED);
+                    break;
+                }
+                response = kvServer.handleKeyRangeMessage(msg);
                 break;
             case DISCONNECT:
                 isOpen = false;

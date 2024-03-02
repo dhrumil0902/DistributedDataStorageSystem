@@ -20,6 +20,7 @@ import app_kvServer.kvCache.LFUCache;
 import app_kvServer.kvCache.LRUCache;
 import shared.BST;
 import shared.messages.ECSMessage;
+import shared.messages.ECSMessage.ActionType;
 import shared.messages.KVMessage;
 import shared.messages.KVMessage.StatusType;
 import shared.messages.KVMessageImpl;
@@ -551,9 +552,19 @@ public class KVServer implements IKVServer, Runnable {
             }
         } else {
             response.setStatus(StatusType.SERVER_NOT_RESPONSIBLE);
-            response.setMetadata(this.metadata);
         }
         return response;
+    }
+
+    public KVMessage handleKeyRangeMessage(KVMessage msg) {
+        KVMessage message = new KVMessageImpl();
+        message.setMetadata(metadata);
+        if (message.getMetadata() == null) {
+            message.setStatus(KVMessage.StatusType.KEYRANGE_ERROR);
+        } else {
+            message.setStatus(KVMessage.StatusType.KEYRANGE_SUCCESS);
+        }
+        return message;
     }
 
 //    @Override

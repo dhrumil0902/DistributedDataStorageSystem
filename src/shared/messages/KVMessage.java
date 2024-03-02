@@ -14,10 +14,13 @@ public interface KVMessage {
 		PUT_ERROR, 		/* Put - request not successful */
 		DELETE_SUCCESS, /* Delete - request successful */
 		DELETE_ERROR, 	/* Delete - request successful */
-		DISCONNECT,
 		SERVER_NOT_RESPONSIBLE,
 		SERVER_WRITE_LOCK,
-		SERVER_STOPPED
+		SERVER_STOPPED,
+		KEYRANGE,
+		KEYRANGE_ERROR,
+		KEYRANGE_SUCCESS,
+		DISCONNECT
 	}
 
 	/**
@@ -45,6 +48,8 @@ public interface KVMessage {
 	public void setStatus(StatusType status);
 
 	public void setMetadata(BST metadata);
+
+	public BST getMetadata();
 }
 
 

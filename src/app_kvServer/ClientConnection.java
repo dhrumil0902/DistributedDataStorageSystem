@@ -105,24 +105,57 @@ public class ClientConnection implements Runnable {
 
         switch (action) {
             case SET_WRITE_LOCK:
+                logger.info("Received command to SET_WRITE_LOCK in: " + kvServer.getPort());
+                if (kvServer.getWriteLock()) {
+                    // write lock already set
+                    response.setSuccess(false);
+                    response.setErrorMessage("Write lock already set.");
+                    break;
+                }
+                logger.info("SET_WRITE_LOCK successfull in: " + kvServer.getPort());
                 kvServer.setWriteLock(true);
                 response.setSuccess(true);
                 break;
             case UNSET_WRITE_LOCK:
+                logger.info("Received command to UNSET_WRITE_LOCK in: " + kvServer.getPort());
+                if (!kvServer.getWriteLock()) {
+                    // write lock not set
+                    response.setSuccess(false);
+                    response.setErrorMessage("Write lock not set.");
+                    break;
+                }
+                logger.info("UNSET_WRITE_LOCK successfully in: " + kvServer.getPort());
                 kvServer.setWriteLock(false);
                 response.setSuccess(true);
                 break;
             case APPEND:
+                logger.info("Received command to append data in: " + kvServer.getPort());
+                if (!kvServer.getWriteLock()) {
+                    // write lock not set
+                    response.setSuccess(false);
+                    response.setErrorMessage("Write lock not set.");
+                    break;
+                }
+                logger.info("Append data successful: " + kvServer.getPort());
                 kvServer.appendDataToStorage(msg.getData());
                 response.setSuccess(true);
                 break;
             case GET_DATA:
+                logger.info("Received command to GET_DATA in: " + kvServer.getPort());
+                if (!kvServer.getWriteLock()) {
+                    // write lock not set
+                    response.setSuccess(false);
+                    response.setErrorMessage("Write lock not set.");
+                    break;
+                }
                 if (range == null) {
                     response.setData(kvServer.getAllData());
                 } else {
+                    logger.info("Setting data in response of port: " + kvServer.getPort());
                     response.setData(kvServer.getData(range[0], range[1]));
                 }
                 if (response.getData() != null) {
+                    logger.info("Command GET_DATA successfully returning in: " + kvServer.getPort() + "'sending data of size: " + response.getData().size());
                     response.setSuccess(true);
                 } else {
                     response.setSuccess(false);
@@ -130,7 +163,17 @@ public class ClientConnection implements Runnable {
                 }
                 break;
             case REMOVE:
+                logger.info("Received command to REMOVE in: " + kvServer.getPort());
+                logger.info("Range: " + range[0] + " : " + range[1]);
+                if (!kvServer.getWriteLock()) {
+                    logger.error("NOT able to REMOVE data in: " + kvServer.getPort());
+                    // write lock not set
+                    response.setSuccess(false);
+                    response.setErrorMessage("Write lock not set.");
+                    break;
+                }
                 if (kvServer.removeData(range[0], range[1])) {
+                    logger.info("Successfully able to REMOVE data in: " + kvServer.getPort());
                     response.setSuccess(true);
                 } else {
                     response.setSuccess(false);
@@ -139,6 +182,7 @@ public class ClientConnection implements Runnable {
                 break;
             case UPDATE_METADATA:
                 kvServer.updateMetadata(msg.getNodes());
+                logger.info("Successfully updated metadata in: " + kvServer.getPort());
                 response.setSuccess(true);
                 break;
             case DELETE:

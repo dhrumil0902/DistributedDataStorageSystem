@@ -1,5 +1,7 @@
 package app_kvECS;
 
+import app_kvECS.ECSClient;
+import ecs.IECSNode;
 import org.apache.log4j.*;
 
 import shared.messages.ECSMessage;
@@ -85,12 +87,26 @@ public class ServerConnection implements Runnable{
 					response.setSuccess(false);
 				}
 				break;
+			case DELETE:
+				if (msg.getServerInfo() != null && msg.getServerInfo().length == 2) {
+
+					String address = msg.getServerInfo()[0];
+					String port = (msg.getServerInfo()[1]);
+					logger.info("Server asking to be removed from ring: " + port);
+					try {
+						ecsServer.removeNode(address + port, msg.getData());
+					} catch (Exception e) {
+						throw new RuntimeException(e);
+					}
+				} else {
+					logger.error("Server info (address and port) not properly set in ECSMessage.");
+				}
+				return;
 			default:
 				logger.error("Unknown action.");
 		}
 		sendMessage(response);
 	}
-
 	private void sendMessage(ECSMessage responseMessage) throws IOException {
 		output.writeObject(responseMessage);
 		output.flush();

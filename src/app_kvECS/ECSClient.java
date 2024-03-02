@@ -12,6 +12,7 @@ import java.util.*;
 
 import app_kvECS.ECSMessage.ActionType;
 import app_kvECS.ServerConnection;
+import app_kvServer.IKVServer;
 import app_kvServer.KVServer;
 import ecs.ECSNode;
 import ecs.IECSNode;
@@ -77,15 +78,11 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
     }
 
     private boolean initializeServer() {
-        logger.info("Initialize server ...here");
         try {
-            logger.info("port" + port);
             InetSocketAddress socketAddress = new InetSocketAddress("127.0.0.1", port);
-            logger.info("Initialize server ...here2");
             serverSocket = new ServerSocket();
-            logger.info("Initialize server ...here3");
             serverSocket.bind(socketAddress);
-            logger.info("Server listening on port: " + serverSocket.getLocalPort());
+            logger.info("ECSClient listening on port: " + serverSocket.getLocalPort());
             return true;
         } catch (IOException e) {
             logger.error("Error! Cannot open server socket:");
@@ -524,28 +521,89 @@ public ECSMessage sendMessage(ECSNode node, ECSMessage msg) throws Exception {
     }
 
     public static void main(String[] args) throws IOException {
-        new LogSetup("test2.log", Level.ALL);
-        new ECSClient("127.0.0.1", 5100);
-        KVServer server = new KVServer("localhost", 5100, "localhost", 4710, 0, "None", System.getProperty("user.dir"));
-        try {
-            server.putKV("this", "val_test");
-            server.putKV("dsdaslskdskldasklasclsalcss", "val_test");
-            server.putKV("ewdfkdwloejwdflcdw", "val_test");
-            server.putKV("ranyyyyyyyyyyyyyyyyyyyydom", "val_test");
-            server.putKV("vfdfvfuuuuuuuuuuuuuuuuuuv", "val_test");
-            server.putKV("dfvddfvkkuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu", "val_test");
-            server.putKV("dvfdfvdfvdyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyf", "val_test");
-            server.putKV("vdfvfffffffffffffffffffffffdfvdfv", "val_test");
-            server.putKV("dfvddfvkkuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu", "val_test");
-            server.putKV("dvfdfvdfvdyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyf", "val_test");
-            server.putKV("vdfvfffffffffffffffffffffffdfvdfv", "val_test");
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+        String helpString = generateHelpString();
+
+        // Default Values
+        int port = 5100;
+        String address = "localhost";
+        String logFile = System.getProperty("user.dir") + "/ecsserver.log";
+        Level logLevel = Level.ALL;
+
+        if (args.length > 0 && args[0].equals("-h")) {
+            System.out.println(helpString);
+            System.exit(1);
         }
-        //server = new KVServer("localhost", 5100, "localhost", 6700, 0, "None", System.getProperty("user.dir"));
-        logger.info(server.getAllData());
-        while(true){
+
+        try {
+            for (int i = 0; i < args.length; i += 2) {
+                switch (args[i]) {
+                    case "-p":
+                        port = Integer.parseInt(args[i + 1]);
+                        break;
+                    case "-a":
+                        address = args[i + 1];
+                        break;
+                    case "-l":
+                        logFile = args[i + 1];
+                        break;
+                    case "-ll":
+                        if (LogSetup.isValidLevel(args[i + 1]))
+                            logLevel = Level.toLevel(args[i + 1]);
+                        else {
+                            System.out.println("Invalid log level: " + args[i + 1]);
+                            System.out.println(helpString);
+                            System.exit(1);
+                        }
+                        break;
+                    default:
+                        System.out.println("Invalid argument: " + args[i]);
+                        System.out.println(helpString);
+                        System.exit(1);
+                }
+            }
+        } catch (NumberFormatException nfe) {
+            System.out.println("Error! Invalid argument -p! Not a number!");
+            System.out.println(helpString);
+            System.exit(1);
+        } catch (IllegalArgumentException iae) {
+            System.out.println("Error! Invalid argument -cs! Not a valid cache strategy!");
+            System.out.println(helpString);
+            System.exit(1);
+        } catch (Exception e) {
+            System.out.println("Unexpected error:\n" + e.getMessage());
+            System.out.println(helpString);
+            System.exit(1);
+        }
+
+        try {
+            new LogSetup(logFile, logLevel);
+            final ECSClient escClient = new ECSClient(address, port);
+            Runtime.getRuntime().addShutdownHook(new Thread() {
+                public void run() {
+                    escClient.close();
+                }
+            });
+        } catch (IOException e) {
+            System.out.println("Error! Unable to initialize logger!");
+            System.exit(1);
+        } catch (Exception e) {
+            System.out.println("Unexpected error:\n" + e.getMessage());
+            System.exit(1);
         }
     }
 
+    private void close() {
+        logger.info("Closing ECSClient");
+    }
+
+    private static String generateHelpString() {
+        return "Help Screen:"
+                + "Options:\n"
+                + "  -p <port>          Port number for the KVServer (default: 5000)\n"
+                + "  -a <address>       Address for the KVServer (default: localhost)\n"
+                + "  -l <logFile>       File path for the log file (default: ./server.log)\n"
+                + "  -ll <logLevel>     Log level for the server (default: ALL)\n"
+                + "Example:\n"
+                + "  java KVServer -p 8080 -a 127.0.0.1  -l /path/to/server.log -ll INFO";
+    }
 }

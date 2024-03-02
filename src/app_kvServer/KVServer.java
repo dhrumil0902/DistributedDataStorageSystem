@@ -314,7 +314,13 @@ public class KVServer implements IKVServer, Runnable {
     @Override
     public void run() {
         running = initializeServer();
-        new Thread(this::connectToCentralServer).start();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                connectToCentralServer();
+            }
+        }).start();
+
         if (serverSocket != null) {
             while (isRunning()) {
                 try {

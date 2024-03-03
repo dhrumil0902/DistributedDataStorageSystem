@@ -3,8 +3,10 @@ logs/
 
 m2-client.jar
 m2-server.jar
+m2-ecs.jar
 SERVER_MANIFEST.MF
 CLIENT_MANIFEST.MF
+ECS_MANIFEST.MF
 
 /bin/
 

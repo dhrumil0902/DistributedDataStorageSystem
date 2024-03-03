@@ -34,6 +34,7 @@ public class KVStore implements KVCommInterface {
 			throw new Exception("Already connected to a server");
 		}
 		commManager.connect(address, port);
+		updateMetadata();
 	}
 
 	@Override

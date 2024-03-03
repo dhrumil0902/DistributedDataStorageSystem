@@ -2,16 +2,20 @@ package client;
 
 import org.apache.log4j.Logger;
 
+import ecs.IECSNode;
+import shared.BST;
 import shared.messages.KVMessage;
 import shared.messages.KVMessageImpl;
 
 public class KVStore implements KVCommInterface {
 	private Logger logger = Logger.getRootLogger();
 
-	private final String address;
-	private final int port;
+	private String address;
+	private int port;
+	private String nodeName;
+	private BST metadata;
 	
-	private CommManager commManager;
+	private final CommManager commManager;
 	
 	/**
 	 * Initialize KVStore with address and port of KVServer
@@ -39,17 +43,29 @@ public class KVStore implements KVCommInterface {
 	
 	@Override
 	public KVMessage put(String key, String value) throws Exception {
-		String msg = "put " + key + " " + value;
-		String response = commManager.sendMessage(msg);
-		return KVMessageImpl.fromString(response);
+		String request = "put " + key + " " + value;
+		setServerForKey(key);
+		KVMessage responseMessage = sendRequest(request);
+		if (responseMessage.getStatus() == KVMessage.StatusType.SERVER_NOT_RESPONSIBLE) {
+			updateMetadata();
+			setServerForKey(key);
+			responseMessage = sendRequest(request);
+		}
+		return responseMessage;
 		
 	}
 
 	@Override
 	public KVMessage get(String key) throws Exception {
-		String msg = "get " + key;
-		String response = commManager.sendMessage(msg);
-		return KVMessageImpl.fromString(response);
+		String request = "get " + key;
+		setServerForKey(key);
+		KVMessage responseMessage = sendRequest(request);
+		if (responseMessage.getStatus() == KVMessage.StatusType.SERVER_NOT_RESPONSIBLE) {
+			updateMetadata();
+			setServerForKey(key);
+			responseMessage = sendRequest(request);
+		}
+		return responseMessage;
 	}
 
 	public String getAddress() {
@@ -62,5 +78,33 @@ public class KVStore implements KVCommInterface {
 
 	public boolean isConnected() {
 		return commManager.isConnected();
+	}
+
+	public String getServerName() {
+		return nodeName;
+	}
+
+	private KVMessage sendRequest(String request) throws Exception {
+		String response = commManager.sendMessage(request);
+		KVMessage responseMessage =  KVMessageImpl.fromString(response);
+		return responseMessage;
+	}
+
+	private void updateMetadata() throws Exception {
+		KVMessage metadataMessage = sendRequest("keyrange");
+		if (metadataMessage.getStatus() != KVMessage.StatusType.KEYRANGE_SUCCESS)
+			throw new Exception("Keyrange query failed");
+		metadata = metadataMessage.getMetadata();
+	}
+
+	private void setServerForKey(String key) throws Exception {
+		IECSNode node = metadata.get(key);
+		if (node.getNodeName() != nodeName) {
+			disconnect();
+			this.address = node.getNodeHost();
+			this.port = node.getNodePort();
+			this.nodeName = node.getNodeName();
+			connect();
+		}
 	}
 }

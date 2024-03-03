@@ -16,3 +16,7 @@ questions.txt
 todo.txt
 
 *.tgz
+
+localhost*
+
+*.log

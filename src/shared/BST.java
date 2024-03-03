@@ -1,5 +1,6 @@
 package shared;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import ecs.ECSNode;
 import ecs.IECSNode;
 
@@ -8,6 +9,7 @@ import java.util.*;
 import java.io.*;
 
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class BST implements Serializable {
     public TreeMap<String, ECSNode> bst;
 

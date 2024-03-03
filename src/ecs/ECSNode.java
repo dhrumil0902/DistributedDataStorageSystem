@@ -11,8 +11,10 @@ public class ECSNode implements IECSNode, Serializable {
     public String dBStoragePath;
     private String strategy;
 
+    public ECSNode() {}
 
-    public ECSNode(String nodeName, String nodeHost, int nodePort, String[] nodeHashRange, int cacheSize, String dBStoragePath, String strategy) {
+    public ECSNode(String nodeName, String nodeHost, int nodePort, String[] nodeHashRange, int cacheSize, String dBStoragePath,
+                   String strategy) {
         this.nodeName = nodeName;
         this.nodeHost = nodeHost;
         this.nodePort = nodePort;

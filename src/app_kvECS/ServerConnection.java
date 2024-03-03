@@ -1,20 +1,26 @@
 package app_kvECS;
 
 import app_kvECS.ECSClient;
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import ecs.IECSNode;
 import org.apache.log4j.*;
 
 import shared.messages.ECSMessage;
+import shared.messages.KVMessage;
+import shared.messages.KVMessageImpl;
+
 import java.net.Socket;
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 
 public class ServerConnection implements Runnable{
 
 	private static final Logger logger = Logger.getRootLogger();
 	private final Socket clientSocket;
 	private final ECSClient ecsServer;
-	private ObjectInputStream input;
-	private ObjectOutputStream output;
+	private BufferedReader input;
+	private BufferedWriter output;
 	private boolean isOpen;
 
 	public ServerConnection(Socket clientSocket, ECSClient server) {
@@ -26,8 +32,9 @@ public class ServerConnection implements Runnable{
 	@Override
 	public void run() {
 		try {
-			input = new ObjectInputStream(clientSocket.getInputStream());
-			output = new ObjectOutputStream(clientSocket.getOutputStream());
+			input = new BufferedReader(new InputStreamReader(clientSocket.getInputStream(), StandardCharsets.UTF_8));
+			output = new BufferedWriter(new OutputStreamWriter(clientSocket.getOutputStream(), StandardCharsets.UTF_8));
+
 			while (isOpen) {
 				receiveMessage();
 			}
@@ -47,20 +54,26 @@ public class ServerConnection implements Runnable{
 	}
 
 	private void receiveMessage() {
+		String msg;
 		try {
-			Object obj = input.readObject();
-
-			if (obj instanceof ECSMessage) {
-				ECSMessage message = (ECSMessage) obj;
-				handleECSMessage(message);
-			} else {
-				logger.error("Received an unknown message type.");
+			msg = input.readLine();
+			if (msg == null) {
+				isOpen = false;
+				return;
 			}
-		} catch (EOFException e) {
-			logger.info("Client has closed the connection.");
+
+			try {
+				ECSMessage obj = new ObjectMapper().readValue(msg, ECSMessage.class);
+				handleECSMessage(obj);
+			} catch (JsonMappingException ex) {
+				logger.error("Error during message deserialization.", ex);
+			} catch (IOException ex) {
+				logger.error("IO error during message deserialization.", ex);
+			}
+		} catch (IOException e) {
+//			logger.error("Error during message reception.", e);
+			logger.info("Connection closed by the client.");
 			isOpen = false;
-		} catch (IOException | ClassNotFoundException e) {
-			logger.error("Error during message reception and deserialization.", e);
 		}
 	}
 
@@ -108,7 +121,10 @@ public class ServerConnection implements Runnable{
 		sendMessage(response);
 	}
 	private void sendMessage(ECSMessage responseMessage) throws IOException {
-		output.writeObject(responseMessage);
+		ObjectMapper mapper = new ObjectMapper();
+		String jsonString = mapper.writeValueAsString(responseMessage);
+
+		output.write(jsonString);
 		output.flush();
 	}
 

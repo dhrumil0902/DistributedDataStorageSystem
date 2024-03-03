@@ -2,22 +2,22 @@ package app_kvServer;
 
 import static shared.messages.ECSMessage.ActionType;
 
-import java.io.File;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.io.*;
 import java.net.BindException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.AbstractMap.SimpleEntry;
-import java.io.IOException;
 
 import app_kvServer.kvCache.FIFOCache;
 import app_kvServer.kvCache.IKVCache;
 import app_kvServer.kvCache.LFUCache;
 import app_kvServer.kvCache.LRUCache;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import shared.BST;
 import shared.messages.ECSMessage;
 import shared.messages.ECSMessage.ActionType;
@@ -78,6 +78,8 @@ public class KVServer implements IKVServer, Runnable {
         this.port = port;
         this.cacheSize = cacheSize;
         this.writeLock = false;
+        this.metadata = null;
+        this.register = false;
         try {
             this.strategy = CacheStrategy.valueOf(strategy);
         } catch (IllegalArgumentException e) {
@@ -355,27 +357,7 @@ public class KVServer implements IKVServer, Runnable {
                     "Unable to close socket on port: " + port, e);
         }
     }
-    private void disconnectFromCentralServer() {
 
-        try (Socket ECSSocket = new Socket(ecsAddress, ecsPort)) {
-            // Setup input and output streams
-            ObjectOutputStream out = new ObjectOutputStream(ECSSocket.getOutputStream());
-            ObjectInputStream in = new ObjectInputStream(ECSSocket.getInputStream());
-            ECSMessage msg = new ECSMessage();
-            msg.setData(getAllData());
-            msg.setAction(ActionType.DELETE);
-            msg.setServerInfo(address, port);
-            if (metadata.size() > 1){
-                logger.info("Removing all the data from: " + port);
-                removeData("00000000000000000000000000000000","FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
-            }
-            out.writeObject(msg);
-            out.flush();
-            logger.info("Informing ECSClient to delete server: " + port);
-        } catch (IOException e) {
-            logger.error("Failed to connect to the central server.", e);
-        }
-    }
     @Override
     public void close() {
         logger.info("Closing server.");
@@ -420,32 +402,54 @@ public class KVServer implements IKVServer, Runnable {
 //        }
         try (Socket ECSSocket = new Socket(ecsAddress, ecsPort)) {
             // Setup input and output streams
-            ObjectOutputStream out = new ObjectOutputStream(ECSSocket.getOutputStream());
-            ObjectInputStream in = new ObjectInputStream(ECSSocket.getInputStream());
+            logger.info("Send connection request to ECS.");
+            BufferedWriter out = new BufferedWriter(new OutputStreamWriter(ECSSocket.getOutputStream(), StandardCharsets.UTF_8));
             ECSMessage msg = new ECSMessage();
             msg.setAction(ActionType.NEW_NODE);
             msg.setServerInfo(address, port);
-            out.writeObject(msg);
-            out.flush();
 
-            // Wait for a response from the central server
-            Object obj = in.readObject();
-            if (obj instanceof ECSMessage) {
-                ECSMessage response = (ECSMessage) obj;
-                if (response.getSuccess()) {
-                    // Registration successful, update server state or metadata as needed
-                    logger.info("Successfully connected to the ECS server.");
-                    register = true;
-                    metadata = response.getNodes();
-                    logger.info("Metadata: " + metadata.print());
-                } else {
-                    logger.error("Failed to register with the ECS server.");
-                }
-            } else {
-                // Unexpected response type
-                logger.error("Received an unexpected response type from the ECS server.");
+            ObjectMapper mapper = new ObjectMapper();
+            try {
+                String jsonString = mapper.writeValueAsString(msg);
+                out.write(jsonString);
+                out.newLine();
+                out.flush();
+            } catch (JsonProcessingException e) {
+                logger.error("Failed to parse ECSMessage.");
+            } catch (IOException e) {
+                logger.error("Failed to send ECSMessage.");
             }
-        } catch (IOException | ClassNotFoundException e) {
+        } catch (IOException e) {
+            logger.error("Failed to connect to the central server.", e);
+        }
+    }
+
+    private void disconnectFromCentralServer() {
+
+        try (Socket ECSSocket = new Socket(ecsAddress, ecsPort)) {
+            // Setup input and output streams
+            BufferedWriter out = new BufferedWriter(new OutputStreamWriter(ECSSocket.getOutputStream(), StandardCharsets.UTF_8));
+            ECSMessage msg = new ECSMessage();
+            msg.setData(getAllData());
+            msg.setAction(ActionType.DELETE);
+            msg.setServerInfo(address, port);
+            if (metadata.size() > 1){
+                logger.info("Removing all the data from: " + port);
+                removeData("00000000000000000000000000000000","FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
+            }
+            ObjectMapper mapper = new ObjectMapper();
+            try {
+                String jsonString = mapper.writeValueAsString(msg);
+                out.write(jsonString);
+                out.newLine();
+                out.flush();
+            } catch (JsonProcessingException e) {
+                logger.error("Failed to parse ECSMessage.");
+            } catch (IOException e) {
+                logger.error("Failed to send ECSMessage.");
+            }
+            logger.info("Informing ECSClient to delete server: " + port);
+        } catch (IOException e) {
             logger.error("Failed to connect to the central server.", e);
         }
     }
@@ -607,6 +611,12 @@ public class KVServer implements IKVServer, Runnable {
     }
 
     public void updateMetadata(BST metadata) {
+        if (this.metadata == null) {
+            logger.info("Register to ECS success.");
+            this.metadata = metadata;
+            this.register = true;
+            return;
+        }
         this.metadata = metadata;
     }
 
@@ -649,7 +659,7 @@ public class KVServer implements IKVServer, Runnable {
         int ecsPort = 5100;
         String ecsAddress = "localhost";
         String directory = System.getProperty("user.dir");
-        String logFile = System.getProperty("user.dir") + "/server.log";
+        String logFile = String.format("logs/%s_%d.log", address, port);
         Level logLevel = Level.ALL;
         CacheStrategy strategy = CacheStrategy.None;
         int cacheSize = 10;

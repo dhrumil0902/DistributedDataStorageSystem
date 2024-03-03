@@ -1,9 +1,11 @@
 package app_kvECS;
+
 import java.io.*;
 import java.net.BindException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -14,6 +16,8 @@ import java.util.concurrent.locks.ReentrantLock;
 import app_kvECS.ServerConnection;
 import app_kvServer.IKVServer;
 import app_kvServer.KVServer;
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import ecs.ECSNode;
 import ecs.IECSNode;
 import shared.BST;
@@ -44,6 +48,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
         startServer();
 
     }
+
     @Override
     public void run() {
         this.running = initializeServer();
@@ -121,7 +126,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
         String dBStoragePath = System.getProperty("user.dir") + "/" + port;
         String hashCode = HashUtils.getHash(address + ":" + port);
         String[] hashRange = {getStartNodeHash(hashCode), hashCode};
-        ECSNode ecsNode = new ECSNode(port + "", address,port,hashRange, cacheSize, dBStoragePath, cacheStrategy);
+        ECSNode ecsNode = new ECSNode(port + "", address, port, hashRange, cacheSize, dBStoragePath, cacheStrategy);
         nodes.put(hashCode, ecsNode);
         if (nodes.size() > 1) {
             transferDataForNewNode(hashCode, getSuccessor(hashCode));
@@ -131,9 +136,9 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
         return ecsNode;
     }
 
-    public String putkeyValue(String key, String value){
+    public String putkeyValue(String key, String value) {
         String hashedKey = HashUtils.getHash(key);
-        if (nodes.isEmpty()){
+        if (nodes.isEmpty()) {
             return null;
         }
         try {
@@ -142,7 +147,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
                     ECSNode ecsnode = (ECSNode) nodes.get(nodeKey);
                     Path filePathSuccessor = Paths.get(ecsnode.dBStoragePath, "data.txt");
                     BufferedWriter writer = new BufferedWriter(new FileWriter(String.valueOf(filePathSuccessor), true));
-                    writer.write(key+ " " + value);
+                    writer.write(key + " " + value);
                     writer.newLine();
                     writer.close();
                     return key;
@@ -151,16 +156,17 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
             ECSNode ecsnode = (ECSNode) nodes.get(nodes.min());
             Path filePathSuccessor = Paths.get(ecsnode.dBStoragePath, "data.txt");
             BufferedWriter writer = new BufferedWriter(new FileWriter(String.valueOf(filePathSuccessor), true));
-            writer.write(key+ " " + value);
+            writer.write(key + " " + value);
             writer.newLine();
             writer.close();
             return key;
 
-        } catch (Exception e){
+        } catch (Exception e) {
             System.out.println(e.toString());
             return null;
         }
     }
+
     private void transferDataForNewNode(String newNode, String successor) {
         String minRange = getPredecessor(newNode); // Minimum value of the range
         String maxRange = newNode; // Maximum value of the range
@@ -185,20 +191,17 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
             lines = Files.readAllLines(filePathSuccessor);
             for (String line : lines) {
                 System.out.println(line);
-                String keyHashed = HashUtils.getHash(line.split(" ") [0]);
-                if (maxRange.compareTo(minRange) > 0){
-                    if (keyHashed.compareTo(minRange) > 0 && keyHashed.compareTo(maxRange) <= 0){
+                String keyHashed = HashUtils.getHash(line.split(" ")[0]);
+                if (maxRange.compareTo(minRange) > 0) {
+                    if (keyHashed.compareTo(minRange) > 0 && keyHashed.compareTo(maxRange) <= 0) {
                         linesToTransfer.add(line);
-                    }
-                    else{
+                    } else {
                         linesToKeep.add(line);
                     }
-                }
-                else{
-                    if (keyHashed.compareTo(minRange) > 0 || keyHashed.compareTo(maxRange) <= 0){
+                } else {
+                    if (keyHashed.compareTo(minRange) > 0 || keyHashed.compareTo(maxRange) <= 0) {
                         linesToTransfer.add(line);
-                    }
-                    else{
+                    } else {
                         linesToKeep.add(line);
                     }
                 }
@@ -224,42 +227,36 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
         }
     }
 
-    public String getStartNodeHash(String startingHash)
-    {
-        if (nodes.isEmpty()){
+    public String getStartNodeHash(String startingHash) {
+        if (nodes.isEmpty()) {
             return startingHash;
         }
 
-        if (nodes.predecessor(startingHash) != null)
-        {
+        if (nodes.predecessor(startingHash) != null) {
             return nodes.predecessor(startingHash);
         }
 
         return nodes.max();
     }
 
-    public String getSuccessor(String startingHash)
-    {
-        if (nodes.isEmpty()){
+    public String getSuccessor(String startingHash) {
+        if (nodes.isEmpty()) {
             return null;
         }
 
-        if (nodes.successor(startingHash) != null)
-        {
+        if (nodes.successor(startingHash) != null) {
             return nodes.successor(startingHash);
         }
 
         return nodes.min();
     }
 
-    public String getPredecessor(String startingHash)
-    {
-        if (nodes.isEmpty()){
+    public String getPredecessor(String startingHash) {
+        if (nodes.isEmpty()) {
             return null;
         }
 
-        if (nodes.predecessor(startingHash) != null)
-        {
+        if (nodes.predecessor(startingHash) != null) {
             return nodes.predecessor(startingHash);
         }
 
@@ -296,7 +293,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
 
     @Override
     public boolean removeNodes(Collection<String> nodeNames) {
-        for (String nodeName : nodeNames){
+        for (String nodeName : nodeNames) {
             try {
                 //removeNode(nodeName);
             } catch (Exception e) {
@@ -305,8 +302,9 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
         }
         return true;
     }
-    public boolean removeNode(String nodeName, List<String> dataToTransfer ) throws Exception {
-        synchronized(lock) {
+
+    public boolean removeNode(String nodeName, List<String> dataToTransfer) throws Exception {
+        synchronized (lock) {
             ECSNode removeNode = null;
             String removeNodeHash = null;
             for (String keyNode : nodes.keys()) {
@@ -340,21 +338,21 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
     }
 
     private void transferDataForRemovedNode(ECSNode removeNode, ECSNode successorNode) {
-        try{
+        try {
             ECSMessage msg = sendMessage(removeNode, new ECSMessage(ActionType.GET_DATA, true, null, null, nodes));
-            if (!msg.success){
+            if (!msg.success) {
                 return;
             }
             msg.setAction(ActionType.APPEND);
-            sendMessage(successorNode,msg);
+            sendMessage(successorNode, msg);
             sendMessage(removeNode, new ECSMessage(ActionType.DELETE, true, null, null, nodes));
 
-        }
-        catch (Exception ex) {
+        } catch (Exception ex) {
             System.out.println(Arrays.toString(ex.getStackTrace()));
         }
 
     }
+
     public void startServer() {
         new Thread(this).start();
     }
@@ -372,7 +370,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
     }
 
     public ECSMessage onMessageReceived(String message, int port, String address) {
-        synchronized(lock) {
+        synchronized (lock) {
             if (message.compareTo("New Node") == 0) {
                 String hashCode = HashUtils.getHash(address + ":" + port);
                 String[] hashRange = {getStartNodeHash(hashCode), hashCode};
@@ -406,8 +404,8 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
         }
     }
 
- //   public BST addNode(int port, String address) {
- //       String hashCode = getHash(address + ":" + port);
+    //   public BST addNode(int port, String address) {
+    //       String hashCode = getHash(address + ":" + port);
 //            String[] hashRange = {getStartNodeHash(hashCode), hashCode};
 //            ECSNode ecsNode = new ECSNode(address + port, address,port,hashRange);
 //            nodes.put(hashCode, ecsNode);
@@ -428,7 +426,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
     private List<String> addConnectedNewNode(int port, String address) {
         String hashCode = HashUtils.getHash(address + ":" + port);
         String[] hashRange = {getStartNodeHash(hashCode), hashCode};
-        ECSNode ecsNode = new ECSNode(address + port, address,port,hashRange);
+        ECSNode ecsNode = new ECSNode(address + port, address, port, hashRange);
         nodes.put(hashCode, ecsNode);
         if (nodes.size() > 1) {
             List<String> kvToTransfer = getKVPairsToTransfer(hashCode, getSuccessor(hashCode));
@@ -439,6 +437,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
         }
         return null;
     }
+
     private List<String> getKVPairsToTransfer(String newNode, String successor) {
         String minRange = getPredecessor(newNode); // Minimum value of the range
         String maxRange = newNode; // Maximum value of the range
@@ -448,7 +447,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
             ECSNode ecsNewNode = (ECSNode) nodes.get(newNode);
             ECSMessage ecsMessage = sendMessage(ecsNodeSuccessor, new ECSMessage(ActionType.SET_WRITE_LOCK, true,
                     null, new String[]{minRange, minRange}, nodes));
-            if(!ecsMessage.success){
+            if (!ecsMessage.success) {
                 logger.error("Received error while setting write lock on node: " + ecsNodeSuccessor.getNodeName() + ". Error: " + ecsMessage.getErrorMessage());
                 return null;
             }
@@ -459,8 +458,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
                 return ecsMessage.data;
             }
             return null;
-        }
-        catch (Exception ex){
+        } catch (Exception ex) {
             logger.error(ex);
         }
         return null;
@@ -468,37 +466,46 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
 
     public void updateAllNodesMetaData() {
         logger.info("Starting update of meta data of all nodes ...");
-        for (ECSNode node : nodes.values())
-        {
+        for (ECSNode node : nodes.values()) {
             try {
-                sendMessage(node, new ECSMessage(ActionType.UPDATE_METADATA, true, null,null, nodes));
+                sendMessage(node, new ECSMessage(ActionType.UPDATE_METADATA, true, null, null, nodes));
             } catch (Exception e) {
                 logger.error("Could not successfully update the metadata of all nodes, error: " + e);
             }
         }
         logger.info("Finished updating meta data of all nodes ...");
     }
-public ECSMessage sendMessage(ECSNode node, ECSMessage msg) throws Exception {
-    try (Socket ECSSocket = new Socket(node.getNodeHost(), node.getNodePort())) {
-        // Setup input and output streams
-        ObjectOutputStream out = new ObjectOutputStream(ECSSocket.getOutputStream());
-        ObjectInputStream in = new ObjectInputStream(ECSSocket.getInputStream());
 
-        out.writeObject(msg);
-        out.flush();
+    public ECSMessage sendMessage(ECSNode node, ECSMessage msg) throws Exception {
+        try (Socket ECSSocket = new Socket(node.getNodeHost(), node.getNodePort())) {
+            // Setup input and output streams
+            BufferedWriter out = new BufferedWriter(new OutputStreamWriter(ECSSocket.getOutputStream(), StandardCharsets.UTF_8));
+            BufferedReader in = new BufferedReader(new InputStreamReader(ECSSocket.getInputStream(), StandardCharsets.UTF_8));
 
-        // Wait for a response from the central server
-        Object obj = in.readObject();
-        if (obj instanceof ECSMessage) {
-            return (ECSMessage) obj;
+            ObjectMapper mapper = new ObjectMapper();
+            String jsonString = mapper.writeValueAsString(msg);
+
+            logger.info("Send message: " + jsonString);
+
+//            out.writeObject(msg);
+            out.write(jsonString);
+            out.newLine();
+            out.flush();
+
+            // Wait for a response from the central server
+            String response = in.readLine();
+            try {
+                return new ObjectMapper().readValue(response, ECSMessage.class);
+            } catch (JsonMappingException ex) {
+                logger.error("Error during message deserialization.", ex);
+            }
+        } catch (Exception ex) {
+            logger.error("While trying to receive/send message received error");
         }
-    }catch(Exception ex){
-        logger.error("While trying to receive/send message received error");
+        return null;
     }
-    return null;
-}
 
-//    @Override
+    //    @Override
 //    public void onConnectionClosed() {
 //
 //    }
@@ -532,7 +539,7 @@ public ECSMessage sendMessage(ECSNode node, ECSMessage msg) throws Exception {
         // Default Values
         int port = 5100;
         String address = "localhost";
-        String logFile = System.getProperty("user.dir") + "/ecsserver.log";
+        String logFile = "logs/ecsserver.log";
         Level logLevel = Level.ALL;
 
         if (args.length > 0 && args[0].equals("-h")) {

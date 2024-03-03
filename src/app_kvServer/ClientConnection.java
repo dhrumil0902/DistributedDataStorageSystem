@@ -1,12 +1,15 @@
 package app_kvServer;
 
-import shared.messages.KVMessage.StatusType;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import org.apache.log4j.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonMappingException;
 
 import shared.messages.ECSMessage;
 import shared.messages.KVMessage;
 import shared.messages.KVMessageImpl;
 import shared.messages.ECSMessage.ActionType;
+import shared.messages.KVMessage.StatusType;
 
 import java.io.BufferedInputStream;
 import java.io.File;
@@ -18,13 +21,16 @@ import java.io.*;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
+
 public class ClientConnection implements Runnable {
 
     private static final Logger logger = Logger.getRootLogger();
     private final Socket clientSocket;
     private final KVServer kvServer;
-    private ObjectInputStream input;
-    private ObjectOutputStream output;
+//    private ObjectInputStream input;
+//    private ObjectOutputStream output;
+    private BufferedReader input;
+    private BufferedWriter output;
     private boolean isOpen;
 
     public ClientConnection(Socket clientSocket, KVServer server) {
@@ -36,14 +42,15 @@ public class ClientConnection implements Runnable {
     @Override
     public void run() {
         try {
-            input = new ObjectInputStream(clientSocket.getInputStream());
-            output = new ObjectOutputStream(clientSocket.getOutputStream());
+            input = new BufferedReader(new InputStreamReader(clientSocket.getInputStream(), StandardCharsets.UTF_8));
+            output = new BufferedWriter(new OutputStreamWriter(clientSocket.getOutputStream(), StandardCharsets.UTF_8));
             while (isOpen) {
                 receiveMessage();
             }
         } catch (IOException e) {
             logger.error("Error! Connection could not be established!", e);
         } finally {
+            logger.info("Shut down connection.");
             try {
                 if (clientSocket != null) {
                     input.close();
@@ -57,23 +64,35 @@ public class ClientConnection implements Runnable {
     }
 
     private void receiveMessage() {
+        String msg;
         try {
-            Object obj = input.readObject();
-
-            if (obj instanceof ECSMessage) {
-                ECSMessage message = (ECSMessage) obj;
-                handleECSMessage(message);
-            } else if (obj instanceof KVMessage) {
-                KVMessage message = (KVMessage) obj;
-                handleKVMessage(message);
-            } else {
-                logger.error("Received an unknown message type.");
+            msg = input.readLine();
+            if (msg == null) {
+                isOpen = false;
+                return;
             }
-        } catch (EOFException e) {
-            logger.info("Client has closed the connection.");
+
+            try {
+                // Attempt to deserialize the message as KVMessage first
+                KVMessage message = KVMessageImpl.fromString(msg);
+                logger.info("Receive KVMessage.");
+                handleKVMessage(message);
+            } catch (IllegalArgumentException e) {
+                // If deserialization fails, it might be an ECSMessage, so try that next
+                logger.info("Receive ECSMessage.");
+                try {
+                    ECSMessage obj = new ObjectMapper().readValue(msg, ECSMessage.class);
+                    handleECSMessage(obj);
+                } catch (JsonMappingException ex) {
+                    logger.error("Error during message deserialization.", ex);
+                } catch (IOException ex) {
+                    logger.error("IO error during message deserialization.", ex);
+                }
+            }
+        } catch (IOException e) {
+//            logger.error("Error during message reception.", e);
+            logger.info("Connection closed by the client.");
             isOpen = false;
-        } catch (IOException | ClassNotFoundException e) {
-            logger.error("Error during message reception and deserialization.", e);
         }
     }
 
@@ -98,7 +117,7 @@ public class ClientConnection implements Runnable {
             if (writeLockError != null) {
                 response.setSuccess(false);
                 response.setErrorMessage(writeLockError);
-                sendMessage(response);
+                sendECSMessage(response);
                 return;
             }
         }
@@ -181,6 +200,7 @@ public class ClientConnection implements Runnable {
                 }
                 break;
             case UPDATE_METADATA:
+                logger.info("Received command to UPDATE_METADATA in: " + kvServer.getPort());
                 kvServer.updateMetadata(msg.getNodes());
                 logger.info("Successfully updated metadata in: " + kvServer.getPort());
                 response.setSuccess(true);
@@ -191,15 +211,11 @@ public class ClientConnection implements Runnable {
             default:
                 logger.error("Unknown message from ECS: " + msg);
         }
-        sendMessage(response);
+        sendECSMessage(response);
         isOpen = false;
     }
 
     private void handleKVMessage(KVMessage msg) {
-        if (msg == null) {
-            isOpen = false;
-            return;
-        }
         StatusType status = msg.getStatus();
         KVMessage response = new KVMessageImpl();
         switch (status) {
@@ -213,6 +229,7 @@ public class ClientConnection implements Runnable {
             case PUT:
                 if (!kvServer.checkRegisterStatus()) {
                     response.setStatus(StatusType.SERVER_STOPPED);
+                    logger.info("server not register");
                     break;
                 }
                 response = kvServer.handlePutMessage(msg);
@@ -227,23 +244,35 @@ public class ClientConnection implements Runnable {
             case DISCONNECT:
                 isOpen = false;
                 logger.info("Connection terminated by client");
-                break;
+                return;
             default:
+                isOpen = false;
                 logger.error("Unknown message from client: " + msg);
-                break;
+                return;
         }
-        sendMessage(response);
+        sendKVMessage(response.toString());
     }
 
-    private void sendMessage(Object message)  {
-        if (!(message instanceof ECSMessage) && !(message instanceof KVMessage)) {
-            logger.error("Unknown message type.");
-        }
+    private void sendECSMessage(ECSMessage message)  {
+        ObjectMapper mapper = new ObjectMapper();
         try {
-            output.writeObject(message);
+            String jsonString = mapper.writeValueAsString(message);
+            output.write(jsonString);
+            output.newLine();
+            output.flush();
+        } catch (JsonProcessingException e) {
+            logger.error("Failed to parse ECSMessage.");
+        } catch (IOException e) {
+            logger.error("Failed to send ECSMessage.");
+        }
+    }
+
+    public void sendKVMessage(String msg) {
+        try {
+            output.write(msg + "\n");
             output.flush();
         } catch (IOException e) {
-            logger.error("Failed to send message.");
+            logger.error("Failed to send KVMessage.");
         }
     }
 

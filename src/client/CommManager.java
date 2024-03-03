@@ -40,7 +40,7 @@ public class CommManager {
         this.input = new BufferedReader(new InputStreamReader(clientSocket.getInputStream(), "UTF-8"));
         isConnected = true;
 
-        receiveMessage();
+//        receiveMessage();
     }
 
     /**

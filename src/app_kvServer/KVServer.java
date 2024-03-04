@@ -682,6 +682,7 @@ public class KVServer implements IKVServer, Runnable {
                         String[] pair = args[i + 1].split(":");
                         ecsAddress = pair[0];
                         ecsPort = Integer.parseInt(pair[1]);
+                        System.out.println(ecsAddress + " " + ecsPort);
                         break;
                     case "-p":
                         port = Integer.parseInt(args[i + 1]);
@@ -707,8 +708,8 @@ public class KVServer implements IKVServer, Runnable {
                     case "-c":
                         cacheSize = Integer.parseInt(args[i + 1]);
                         break;
-                    case "-cs":
-                        strategy = CacheStrategy.valueOf(args[i + 1]);
+                    case "-s":
+                        strategy = CacheStrategy.valueOf("None");
                         break;
                     default:
                         System.out.println("Invalid argument: " + args[i]);

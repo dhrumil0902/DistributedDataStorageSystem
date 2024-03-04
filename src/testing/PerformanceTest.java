@@ -7,8 +7,10 @@ import client.KVStore;
 import logger.LogSetup;
 import org.apache.log4j.Level;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Scanner;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -18,7 +20,7 @@ public class PerformanceTest {
     public static void main(String[] args) throws Exception {
         new LogSetup("logs/testing/test2.log", Level.ALL);
         ECSClient ecsClient = new ECSClient("localhost", 5201);
-        runPerformanceTest( 0.8,  100,  10);
+        runPerformanceTest( 0.8,  1000,  25);
     }
 
     private static void runPerformanceTest(double putRatio, int totalRequests, int numServers) throws Exception {
@@ -39,14 +41,27 @@ public class PerformanceTest {
         List<Double> randomValues = generateRandomValues(totalRequests);
         long startTime = System.currentTimeMillis();
 
+        String filePath = "/homes/p/pate1385/ece419/ms2-group-38-good/src/testing/enronData.txt";
+        List<String> words = new ArrayList<String>();
+
+            Scanner scanner = new Scanner(new File(filePath));
+
+            while (scanner.hasNext()) {
+
+                String word = scanner.next();
+                words.add(word);
+                System.out.println(word);
+            }
+            scanner.close();
+
+
         for (int i = 0; i < totalRequests; i++) {
             final double randomValue = randomValues.get(i);
             final double finalPutRatio = putRatio;
 
                     try {
-
                         if (randomValue < finalPutRatio) {
-                            kvClient.put("some_key" + randomValue, "some_value");
+                            kvClient.put(words.get(i), "some_value");
                             putCount.incrementAndGet();
                         } else {
                             kvClient.get("some_key");

@@ -244,7 +244,8 @@ public class ClientConnection implements Runnable {
             case DISCONNECT:
                 isOpen = false;
                 logger.info("Connection terminated by client");
-                return;
+                response.setStatus(KVMessage.StatusType.DISCONNECT);
+                break;
             default:
                 isOpen = false;
                 logger.error("Unknown message from client: " + msg);

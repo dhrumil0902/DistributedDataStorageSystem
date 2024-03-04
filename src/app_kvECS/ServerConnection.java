@@ -107,7 +107,7 @@ public class ServerConnection implements Runnable{
 					String port = (msg.getServerInfo()[1]);
 					logger.info("Server asking to be removed from ring: " + port);
 					try {
-						ecsServer.removeNode(address + port, msg.getData());
+						ecsServer.removeNode(address + ":" + port, msg.getData());
 					} catch (Exception e) {
 						throw new RuntimeException(e);
 					}

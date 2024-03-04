@@ -455,42 +455,8 @@ public class KVServer implements IKVServer, Runnable {
     }
 
 
-    //    @Override
-//    public String onMessageReceived(String message) {
-//        if (message == null || message.isEmpty()) {
-//            logger.error("SERVER: Received empty or null message from client.");
-//            return "FAILED Received empty or null message from client";
-//        }
-//
-//        logger.info("SERVER: Received message from client: " + message);
-//        logger.info("SERVER: Parsing the message on the server side ...");
-//
-//        String[] splitMessage = message.split(" ");
-//
-//        if (splitMessage.length == 0) {
-//            logger.error("Invalid empty message received.");
-//            return "FAILED Invalid empty message received.";
-//        }
-//
-//        String command = splitMessage[0];
-//
-//        switch (command) {
-//            case "get":
-//                return handleGetMessage(splitMessage);
-//
-//            case "put":
-//                return handlePutMessage(splitMessage);
-//
-//            default:
-//                logger.error("Unknown command: " + command);
-//                return "FAILED unknown command " + command;
-//        }
-//    }
-
     public boolean checkKeyRange(String key) {
-        String nodeHash = HashUtils.getHash(address + ":" + port);
-        String[] keyRange = metadata.get(nodeHash).getNodeHashRange();
-        return HashUtils.evaluateKeyHash(key, keyRange[0], keyRange[1]);
+        return metadata.floorEntry(HashUtils.getHash(key)).getNodeName().equals(address + ":" + port);
     }
 
     public KVMessage handleGetMessage(KVMessage message) {

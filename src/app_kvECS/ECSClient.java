@@ -374,7 +374,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
             if (message.compareTo("New Node") == 0) {
                 String hashCode = HashUtils.getHash(address + ":" + port);
                 String[] hashRange = {getStartNodeHash(hashCode), hashCode};
-                ECSNode ecsNode = new ECSNode(address + port, address, port, hashRange);
+                ECSNode ecsNode = new ECSNode(address + ":" + port, address, port, hashRange);
                 nodes.put(hashCode, ecsNode);
                 List<String> kvToTransfer = new ArrayList<String>();
                 if (nodes.size() > 1) {
@@ -426,7 +426,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
     private List<String> addConnectedNewNode(int port, String address) {
         String hashCode = HashUtils.getHash(address + ":" + port);
         String[] hashRange = {getStartNodeHash(hashCode), hashCode};
-        ECSNode ecsNode = new ECSNode(address + port, address, port, hashRange);
+        ECSNode ecsNode = new ECSNode(address + ":" + port, address, port, hashRange);
         nodes.put(hashCode, ecsNode);
         if (nodes.size() > 1) {
             List<String> kvToTransfer = getKVPairsToTransfer(hashCode, getSuccessor(hashCode));

@@ -108,7 +108,7 @@ public class KVStore implements KVCommInterface {
 		
 		IECSNode node = metadata.floorEntry(hashedKey);
 
-		if (node.getNodeName() != nodeName) {
+		if (!node.getNodeName().equals(nodeName)) {
 			disconnect();
 			this.address = node.getNodeHost();
 			this.port = node.getNodePort();

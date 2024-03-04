@@ -97,11 +97,10 @@ public class CommManager {
         String msg = input.readLine();
         if (msg == null) {
             isConnected = false;
-            throw new IOException("Server has shut down unexpectedly");
+            logger.error("Server has shut down unexpectedly");
         } else if (msg.equals("DISCONNECT")) {
             isConnected = false;
             logger.info("Connection terminated by server");
-            throw new IOException("Server has terminated the connection");
         }
         return msg;
     }

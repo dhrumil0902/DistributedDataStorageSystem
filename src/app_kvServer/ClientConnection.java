@@ -76,6 +76,7 @@ public class ClientConnection implements Runnable {
                 // Attempt to deserialize the message as KVMessage first
                 KVMessage message = KVMessageImpl.fromString(msg);
                 logger.info("Receive KVMessage.");
+                logger.info("Message: " + msg);
                 handleKVMessage(message);
             } catch (IllegalArgumentException e) {
                 // If deserialization fails, it might be an ECSMessage, so try that next
@@ -112,7 +113,8 @@ public class ClientConnection implements Runnable {
                 action == ActionType.GET_DATA ||
                 action == ActionType.REMOVE;
 
-        if (requiresWriteLock) {
+
+        /*if (requiresWriteLock) {
             String writeLockError = checkWriteLockCondition(action != ActionType.UNSET_WRITE_LOCK);
             if (writeLockError != null) {
                 response.setSuccess(false);
@@ -120,7 +122,7 @@ public class ClientConnection implements Runnable {
                 sendECSMessage(response);
                 return;
             }
-        }
+        }*/
 
         switch (action) {
             case SET_WRITE_LOCK:
@@ -227,6 +229,7 @@ public class ClientConnection implements Runnable {
                 response = kvServer.handleGetMessage(msg);
                 break;
             case PUT:
+                logger.info("In put.");
                 if (!kvServer.checkRegisterStatus()) {
                     response.setStatus(StatusType.SERVER_STOPPED);
                     logger.info("server not register");
@@ -251,6 +254,7 @@ public class ClientConnection implements Runnable {
                 logger.error("Unknown message from client: " + msg);
                 return;
         }
+        logger.info("Sending message: " + response.toString());
         sendKVMessage(response.toString());
     }
 

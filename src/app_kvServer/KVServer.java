@@ -496,6 +496,7 @@ public class KVServer implements IKVServer, Runnable {
             return response;
         }
         if (checkKeyRange(key)) {
+            logger.info("In range key");
             response.setKey(key);
             synchronized (lock) {
                 logger.debug("Got the Lock");

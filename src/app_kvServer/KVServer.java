@@ -490,6 +490,7 @@ public class KVServer implements IKVServer, Runnable {
     public boolean checkKeyRange(String key) {
         String nodeHash = HashUtils.getHash(address + ":" + port);
         String[] keyRange = metadata.get(nodeHash).getNodeHashRange();
+        logger.info("In checkkeyrange: " + key + " " + keyRange[0] + " " + keyRange[1]);
         return HashUtils.evaluateKeyHash(key, keyRange[0], keyRange[1]);
     }
 
@@ -530,6 +531,7 @@ public class KVServer implements IKVServer, Runnable {
             return response;
         }
         if (checkKeyRange(key)) {
+            logger.info("In range key");
             response.setKey(key);
             synchronized (lock) {
                 logger.debug("Got the Lock");

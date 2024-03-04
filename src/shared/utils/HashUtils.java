@@ -28,6 +28,10 @@ public class HashUtils {
     }
 
     public static boolean evaluateKeyHash(String key, String minVal, String maxVal) {
+        if (minVal.compareTo(maxVal) == 0) {
+            return true;
+        }
+
         BigInteger bottom = new BigInteger(minVal, 16);
         BigInteger top = new BigInteger(maxVal, 16);
         String hashHex = getHash(key);

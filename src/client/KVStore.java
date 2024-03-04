@@ -6,6 +6,7 @@ import ecs.IECSNode;
 import shared.BST;
 import shared.messages.KVMessage;
 import shared.messages.KVMessageImpl;
+import shared.utils.HashUtils;
 
 public class KVStore implements KVCommInterface {
 	private Logger logger = Logger.getRootLogger();
@@ -35,6 +36,7 @@ public class KVStore implements KVCommInterface {
 		}
 		commManager.connect(address, port);
 		updateMetadata();
+		nodeName = address + ":" + port;
 	}
 
 	@Override
@@ -99,7 +101,13 @@ public class KVStore implements KVCommInterface {
 	}
 
 	private void setServerForKey(String key) throws Exception {
-		IECSNode node = metadata.get(key);
+		String hashedKey = HashUtils.getHash(key);
+		if (metadata.isEmpty()) {
+            return;
+        }
+		
+		IECSNode node = metadata.floorEntry(hashedKey);
+
 		if (node.getNodeName() != nodeName) {
 			disconnect();
 			this.address = node.getNodeHost();

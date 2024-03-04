@@ -15,15 +15,15 @@ public class PerformanceTest {
     private static AtomicInteger putCount = new AtomicInteger(0);
 
     public static void main(String[] args) throws Exception {
-        new LogSetup("logs/testing/test2.log", Level.OFF);
+        new LogSetup("logs/testing/test2.log", Level.ALL);
         ECSClient ecsClient = new ECSClient("localhost", 5201);
+        runPerformanceTest( 0.8,  100,  10);
     }
 
     private static void runPerformanceTest(double putRatio, int totalRequests, int numServers) throws Exception {
 
         for (int num = 1; num <= numServers; num++){
-            KVServer kvServer = new KVServer("localhost", 5201, "localhost", 5000 + (8 * num), 0, "None", System.getProperty("user.dir"));
-
+            KVServer kvServer = new KVServer("localhost", 5201, "localhost", 5000 + (80 * num), 0, "None", System.getProperty("user.dir"));
         }
         try {
             Thread.sleep(1000);

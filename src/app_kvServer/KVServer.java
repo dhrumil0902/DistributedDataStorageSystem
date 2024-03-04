@@ -712,8 +712,6 @@ public class KVServer implements IKVServer, Runnable {
                         break;
                     default:
                         System.out.println("Invalid argument: " + args[i]);
-                        System.out.println(helpString);
-                        System.exit(1);
                 }
             }
         } catch (NumberFormatException nfe) {

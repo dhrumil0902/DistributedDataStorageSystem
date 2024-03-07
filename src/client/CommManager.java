@@ -98,6 +98,7 @@ public class CommManager {
         if (msg == null) {
             isConnected = false;
             logger.error("Server has shut down unexpectedly");
+            msg = "DISCONNECT";
         } else if (msg.equals("DISCONNECT")) {
             isConnected = false;
             logger.info("Connection terminated by server");

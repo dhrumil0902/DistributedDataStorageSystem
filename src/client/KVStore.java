@@ -2,6 +2,7 @@ package client;
 
 import org.apache.log4j.Logger;
 
+import ecs.ECSNode;
 import ecs.IECSNode;
 import shared.BST;
 import shared.messages.KVMessage;
@@ -90,6 +91,22 @@ public class KVStore implements KVCommInterface {
 	private KVMessage sendRequest(String request) throws Exception {
 		String response = commManager.sendMessage(request);
 		KVMessage responseMessage =  KVMessageImpl.fromString(response);
+		logger.info("Received message: " + responseMessage.getStatus());
+		if (responseMessage.getStatus() == KVMessage.StatusType.DISCONNECT) {
+			metadata.delete(HashUtils.getHash(nodeName));
+			disconnect();
+			if(!metadata.isEmpty()) {
+				IECSNode node = metadata.floorEntry(HashUtils.getHash(nodeName));
+				this.address = node.getNodeHost();
+				this.port = node.getNodePort();
+				this.nodeName = node.getNodeName();
+				connect();
+				responseMessage = sendRequest(request);
+			} else {
+				disconnect();
+				throw new Exception("No servers available");
+			}
+		}
 		return responseMessage;
 	}
 

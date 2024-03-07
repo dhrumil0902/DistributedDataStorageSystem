@@ -54,8 +54,8 @@ public class KVMessageImpl implements KVMessage, Serializable {
             if (splitKeyrange.length != 3) throw e;
             String[] ipPort = splitKeyrange[2].split(":");
             if (ipPort.length != 2) throw e;
-            ECSNode node = new ECSNode(ipPort[0] + ipPort[1], ipPort[0], Integer.parseInt(ipPort[1]), new String[]{splitKeyrange[0], splitKeyrange[1]});
-            kvMessage.metadata.put(splitKeyrange[0], node);
+            ECSNode node = new ECSNode(ipPort[0] + ":" + ipPort[1], ipPort[0], Integer.parseInt(ipPort[1]), new String[]{splitKeyrange[0], splitKeyrange[1]});
+            kvMessage.metadata.put(splitKeyrange[1], node);
         }
         return kvMessage;
     }

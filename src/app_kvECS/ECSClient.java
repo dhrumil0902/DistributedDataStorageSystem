@@ -39,6 +39,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
     private List<ServerConnection> clientConnections = new ArrayList<ServerConnection>();
     UniqueRandomNumberGenerator randomNumberGen = new UniqueRandomNumberGenerator();
     private final Lock lock = new ReentrantLock();
+    private Heartbeat heartbeat;
 
     public ECSClient(String address, int port) {
 
@@ -46,7 +47,10 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
         this.port = port;
         this.address = address;
         startServer();
-
+        new Thread(() -> {
+            Heartbeat heartbeat = new Heartbeat(this);
+            heartbeat.start();
+        }).start();
     }
 
     @Override
@@ -624,4 +628,30 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
                 + "Example:\n"
                 + "  java KVServer -p 8080 -a 127.0.0.1  -l /path/to/server.log -ll INFO";
     }
-}
+
+    public void onServerDown(ECSNode node) {
+        logger.info("Server" + node.getNodeName() + "is down.");
+    }
+
+
+    public void sendHeartbeats() {
+        synchronized (this) {
+            logger.info("Sending HeartBeats");
+            /*for (IECSNode node : this.getNodes().values()) {
+                try {
+                    ECSMessage heartbeatMsg = new ECSMessage(ActionType.HEARTBEAT, true, null, null, null);
+                    ECSMessage response = this.sendMessage((ECSNode) node, heartbeatMsg);
+                    if (response == null || !response.success) {
+                        logger.info("Failed to receive heartbeat response from: " + node.getNodeName());
+                    } else {
+                        logger.info("Received heartbeat response from: " + node.getNodeName());
+                    }
+                } catch (Exception e) {
+                    logger.error("Error sending heartbeat to " + node.getNodeName());
+                    e.printStackTrace();
+                }
+            }*/
+            }
+        }
+    }
+

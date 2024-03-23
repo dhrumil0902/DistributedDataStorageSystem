@@ -14,7 +14,8 @@ public class ECSMessage implements Serializable {
         GET_DATA, // returns all the data, sucess= true , data has the list of KV pairs
         APPEND, // appends the given KV pairs stored in "data" field, return successs = true
         REMOVE, // remove all keys in the range field, and return those KV pairs, stored in data. success = true
-        UPDATE_METADATA // "nodes" field is filled with metadata, simply update kvserver's "nodes" field and return success = true
+        UPDATE_METADATA, // "nodes" field is filled with metadata, simply update kvserver's "nodes" field and return success = true
+        HEARTBEAT
     }
 
     private ActionType action;

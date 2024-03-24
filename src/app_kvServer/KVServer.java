@@ -1,14 +1,11 @@
 package app_kvServer;
 
-import static shared.messages.ECSMessage.ActionType;
-
 import java.io.*;
 import java.net.BindException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.AbstractMap.SimpleEntry;
 
@@ -457,9 +454,9 @@ public class KVServer implements IKVServer, Runnable {
 
     public boolean checkKeyRange(String key) {
         logger.info(">>>>>");
-        logger.info("Target server name: " + metadata.floorEntry(HashUtils.getHash(key)).getNodeName());
+        logger.info("Target server name: " + metadata.higherEntry(HashUtils.getHash(key)).getNodeName());
         logger.info("Current server name: " + address + ":" + port);
-        return metadata.floorEntry(HashUtils.getHash(key)).getNodeName().equals(address + ":" + port);
+        return metadata.higherEntry(HashUtils.getHash(key)).getNodeName().equals(address + ":" + port);
     }
 
     public KVMessage handleGetMessage(KVMessage message) {

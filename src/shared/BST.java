@@ -3,7 +3,6 @@ package shared;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import ecs.ECSNode;
 import ecs.IECSNode;
-import shared.utils.HashUtils;
 
 import java.io.Serializable;
 import java.util.*;
@@ -90,12 +89,12 @@ public class BST implements Serializable {
         return bst.values();
     }
 
-    public IECSNode floorEntry(String key) {
+    public IECSNode higherEntry(String key) {
         if (bst.isEmpty()) {
             return null;
         }
 
-        Map.Entry<String, ECSNode> entry = bst.floorEntry(key);
+        Map.Entry<String, ECSNode> entry = bst.higherEntry(key);
         if (entry == null) {
             return bst.lastEntry().getValue();
         }

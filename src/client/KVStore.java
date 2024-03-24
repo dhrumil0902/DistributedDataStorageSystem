@@ -2,7 +2,6 @@ package client;
 
 import org.apache.log4j.Logger;
 
-import ecs.ECSNode;
 import ecs.IECSNode;
 import shared.BST;
 import shared.messages.KVMessage;
@@ -96,7 +95,7 @@ public class KVStore implements KVCommInterface {
 			metadata.delete(HashUtils.getHash(nodeName));
 			disconnect();
 			if(!metadata.isEmpty()) {
-				IECSNode node = metadata.floorEntry(HashUtils.getHash(nodeName));
+				IECSNode node = metadata.higherEntry(HashUtils.getHash(nodeName));
 				this.address = node.getNodeHost();
 				this.port = node.getNodePort();
 				this.nodeName = node.getNodeName();
@@ -123,7 +122,7 @@ public class KVStore implements KVCommInterface {
             return;
         }
 		
-		IECSNode node = metadata.floorEntry(hashedKey);
+		IECSNode node = metadata.higherEntry(hashedKey);
 
 		if (!node.getNodeName().equals(nodeName)) {
 			disconnect();

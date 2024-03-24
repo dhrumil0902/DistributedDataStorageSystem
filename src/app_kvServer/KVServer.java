@@ -456,6 +456,9 @@ public class KVServer implements IKVServer, Runnable {
 
 
     public boolean checkKeyRange(String key) {
+        logger.info(">>>>>");
+        logger.info("Target server name: " + metadata.floorEntry(HashUtils.getHash(key)).getNodeName());
+        logger.info("Current server name: " + address + ":" + port);
         return metadata.floorEntry(HashUtils.getHash(key)).getNodeName().equals(address + ":" + port);
     }
 

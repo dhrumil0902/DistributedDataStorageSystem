@@ -91,7 +91,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
 
     private boolean initializeServer() {
         try {
-            InetSocketAddress socketAddress = new InetSocketAddress("127.0.0.1", port);
+            InetSocketAddress socketAddress = new InetSocketAddress(address, port);
             serverSocket = new ServerSocket();
             serverSocket.bind(socketAddress);
             logger.info("ECSClient listening on port: " + serverSocket.getLocalPort());

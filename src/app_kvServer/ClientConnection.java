@@ -190,10 +190,10 @@ public class ClientConnection implements Runnable {
                 logger.info("Successfully updated metadata in: " + kvServer.getPort());
                 response.setSuccess(true);
                 break;
-            case HEARTBEAT:
-                logger.info("Received command HEARTBEAT: " + kvServer.getPort());
-                response.setSuccess(true);
-                break;
+//            case HEARTBEAT:
+//                logger.info("Received command HEARTBEAT: " + kvServer.getPort());
+//                response.setSuccess(true);
+//                break;
             case DELETE:
                 kvServer.close();
                 break;

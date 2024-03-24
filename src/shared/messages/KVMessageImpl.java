@@ -144,6 +144,8 @@ public class KVMessageImpl implements KVMessage, Serializable {
                     return new KVMessageImpl(status);
                 case KEYRANGE:
                     return new KVMessageImpl(status);
+                case KEYRANGE_READ:
+                    return new KVMessageImpl(status);
                 case KEYRANGE_ERROR:
                     return new KVMessageImpl(status);
                 case KEYRANGE_SUCCESS:

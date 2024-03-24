@@ -1,9 +1,9 @@
 .vscode/
-logs/
+/logs/
 
-m2-client.jar
-m2-server.jar
-m2-ecs.jar
+m3-client.jar
+m3-server.jar
+m3-ecs.jar
 SERVER_MANIFEST.MF
 CLIENT_MANIFEST.MF
 ECS_MANIFEST.MF
@@ -22,3 +22,4 @@ todo.txt
 localhost*
 
 *.log
+/.idea/

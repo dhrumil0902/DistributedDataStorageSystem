@@ -107,38 +107,21 @@ public class ClientConnection implements Runnable {
         ECSMessage response = new ECSMessage();
         response.setAction(action);
 
-        boolean requiresWriteLock = action == ActionType.SET_WRITE_LOCK ||
-                action == ActionType.UNSET_WRITE_LOCK ||
-                action == ActionType.APPEND ||
-                action == ActionType.GET_DATA ||
-                action == ActionType.REMOVE;
-
-
-        /*if (requiresWriteLock) {
-            String writeLockError = checkWriteLockCondition(action != ActionType.UNSET_WRITE_LOCK);
-            if (writeLockError != null) {
-                response.setSuccess(false);
-                response.setErrorMessage(writeLockError);
-                sendECSMessage(response);
-                return;
-            }
-        }*/
-
         switch (action) {
             case SET_WRITE_LOCK:
-                logger.info("Received command to SET_WRITE_LOCK in: " + kvServer.getPort());
+                logger.info("Received command SET_WRITE_LOCK: " + kvServer.getPort());
                 if (kvServer.getWriteLock()) {
                     // write lock already set
                     response.setSuccess(false);
                     response.setErrorMessage("Write lock already set.");
                     break;
                 }
-                logger.info("SET_WRITE_LOCK successfull in: " + kvServer.getPort());
+                logger.info("SET_WRITE_LOCK successfull: " + kvServer.getPort());
                 kvServer.setWriteLock(true);
                 response.setSuccess(true);
                 break;
             case UNSET_WRITE_LOCK:
-                logger.info("Received command to UNSET_WRITE_LOCK in: " + kvServer.getPort());
+                logger.info("Received command UNSET_WRITE_LOCK: " + kvServer.getPort());
                 if (!kvServer.getWriteLock()) {
                     // write lock not set
                     response.setSuccess(false);
@@ -150,7 +133,7 @@ public class ClientConnection implements Runnable {
                 response.setSuccess(true);
                 break;
             case APPEND:
-                logger.info("Received command to append data in: " + kvServer.getPort());
+                logger.info("Received command APPEND: " + kvServer.getPort());
                 if (!kvServer.getWriteLock()) {
                     // write lock not set
                     response.setSuccess(false);
@@ -162,7 +145,7 @@ public class ClientConnection implements Runnable {
                 response.setSuccess(true);
                 break;
             case GET_DATA:
-                logger.info("Received command to GET_DATA in: " + kvServer.getPort());
+                logger.info("Received command GET_DATA: " + kvServer.getPort());
                 if (!kvServer.getWriteLock()) {
                     // write lock not set
                     response.setSuccess(false);
@@ -184,7 +167,7 @@ public class ClientConnection implements Runnable {
                 }
                 break;
             case REMOVE:
-                logger.info("Received command to REMOVE in: " + kvServer.getPort());
+                logger.info("Received command REMOVE: " + kvServer.getPort());
                 logger.info("Range: " + range[0] + " : " + range[1]);
                 if (!kvServer.getWriteLock()) {
                     logger.error("NOT able to REMOVE data in: " + kvServer.getPort());
@@ -202,9 +185,13 @@ public class ClientConnection implements Runnable {
                 }
                 break;
             case UPDATE_METADATA:
-                logger.info("Received command to UPDATE_METADATA in: " + kvServer.getPort());
+                logger.info("Received command UPDATE_METADATA in: " + kvServer.getPort());
                 kvServer.updateMetadata(msg.getNodes());
                 logger.info("Successfully updated metadata in: " + kvServer.getPort());
+                response.setSuccess(true);
+                break;
+            case HEARTBEAT:
+                logger.info("Received command HEARTBEAT: " + kvServer.getPort());
                 response.setSuccess(true);
                 break;
             case DELETE:
@@ -238,6 +225,13 @@ public class ClientConnection implements Runnable {
                 response = kvServer.handlePutMessage(msg);
                 break;
             case KEYRANGE:
+                if (!kvServer.checkRegisterStatus()) {
+                    response.setStatus(StatusType.SERVER_STOPPED);
+                    break;
+                }
+                response = kvServer.handleKeyRangeMessage(msg);
+                break;
+            case KEYRANGE_READ:
                 if (!kvServer.checkRegisterStatus()) {
                     response.setStatus(StatusType.SERVER_STOPPED);
                     break;

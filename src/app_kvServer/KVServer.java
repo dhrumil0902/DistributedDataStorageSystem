@@ -454,9 +454,9 @@ public class KVServer implements IKVServer, Runnable {
 
     public boolean checkKeyRange(String key) {
         logger.info(">>>>>");
-        logger.info("Target server name: " + metadata.higherEntry(HashUtils.getHash(key)).getNodeName());
+        logger.info("Target server name: " + metadata.getNodeFromKey(HashUtils.getHash(key)).getNodeName());
         logger.info("Current server name: " + address + ":" + port);
-        return metadata.higherEntry(HashUtils.getHash(key)).getNodeName().equals(address + ":" + port);
+        return metadata.getNodeFromKey(HashUtils.getHash(key)).getNodeName().equals(address + ":" + port);
     }
 
     public KVMessage handleGetMessage(KVMessage message) {
@@ -565,16 +565,6 @@ public class KVServer implements IKVServer, Runnable {
             message.setStatus(KVMessage.StatusType.KEYRANGE_SUCCESS);
         }
         return message;
-    }
-
-//    @Override
-//    public void onConnectionClosed() {
-//
-//        logger.info("Connection closed by client.");
-//    }
-
-    public void setAddress(String address) {
-        this.address = address;
     }
 
     public void updateMetadata(BST metadata) {

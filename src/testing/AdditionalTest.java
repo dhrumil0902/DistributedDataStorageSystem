@@ -234,4 +234,28 @@ public class AdditionalTest extends TestCase {
         }
     }
 
+    @Test
+    public void testTempTest() {
+        try {
+            new LogSetup("test3.log", Level.ALL);
+            ECSClient client = new ECSClient("localhost", 5100);
+            KVServer server0 = new KVServer("localhost", 5100, "localhost", 46683, 0, "None", System.getProperty("user.dir"));
+            Thread.sleep(2000);
+            server0.putKV("key", "val");
+            KVServer server1 = new KVServer("localhost", 5100, "localhost", 42609, 0, "None", System.getProperty("user.dir"));
+            KVServer server2 = new KVServer("localhost", 5100, "localhost", 42157, 0, "None", System.getProperty("user.dir"));
+            KVServer server3 = new KVServer("localhost", 5100, "localhost", 38977, 0, "None", System.getProperty("user.dir"));
+            KVServer server4 = new KVServer("localhost", 5100, "localhost", 44791, 0, "None", System.getProperty("user.dir"));
+//            System.out.println(server0.getMetadata().print());
+            Thread.sleep(3000);
+            System.out.println(server2.getKV("key"));
+            System.out.println(server0.getKV("key"));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 }

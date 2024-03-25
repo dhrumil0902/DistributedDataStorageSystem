@@ -89,7 +89,7 @@ public class BST implements Serializable {
         return bst.values();
     }
 
-    public IECSNode higherEntry(String key) {
+    public IECSNode getNodeFromKey(String key) {
         if (bst.isEmpty()) {
             return null;
         }

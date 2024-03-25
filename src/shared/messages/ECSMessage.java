@@ -11,7 +11,7 @@ public class ECSMessage implements Serializable {
         DELETE, //stop the server (keeps running but returns SERVER_STOPPED to client) returns (success = true)
         SET_WRITE_LOCK, // sets write lock, returns success = true
         UNSET_WRITE_LOCK, //unset write lock, return sucess = true
-        GET_DATA, // returns all the data, sucess= true , data has the list of KV pairs
+        TRANSFER, // returns all the data, sucess= true , data has the list of KV pairs
         APPEND, // appends the given KV pairs stored in "data" field, return successs = true
         REMOVE, // remove all keys in the range field, and return those KV pairs, stored in data. success = true
         UPDATE_METADATA, // "nodes" field is filled with metadata, simply update kvserver's "nodes" field and return success = true
@@ -80,4 +80,6 @@ public class ECSMessage implements Serializable {
     public void setErrorMessage(String errorMessage) {this.errorMessage = errorMessage;}
 
     public String[] getRange() {return this.range;}
+
+    public void setRange(String[] range) {this.range = range;}
 }

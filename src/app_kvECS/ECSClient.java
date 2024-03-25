@@ -13,9 +13,6 @@ import java.util.*;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-import app_kvECS.ServerConnection;
-import app_kvServer.IKVServer;
-import app_kvServer.KVServer;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import ecs.ECSNode;
@@ -343,7 +340,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
 
     private void transferDataForRemovedNode(ECSNode removeNode, ECSNode successorNode) {
         try {
-            ECSMessage msg = sendMessage(removeNode, new ECSMessage(ActionType.GET_DATA, true, null, null, nodes));
+            ECSMessage msg = sendMessage(removeNode, new ECSMessage(ActionType.TRANSFER, true, null, null, nodes));
             if (!msg.success) {
                 return;
             }
@@ -373,38 +370,27 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
         return nodes.get(Key);
     }
 
-    public ECSMessage onMessageReceived(String message, int port, String address) {
+    public void onMessageReceived(String message, int port, String address) {
         synchronized (lock) {
-            if (message.compareTo("New Node") == 0) {
+            if (message.equals("New Node")) {
                 String hashCode = HashUtils.getHash(address + ":" + port);
                 String[] hashRange = {getStartNodeHash(hashCode), hashCode};
-                ECSNode ecsNode = new ECSNode(address + ":" + port, address, port, hashRange);
-                nodes.put(hashCode, ecsNode);
+                ECSNode newNode = new ECSNode(address + ":" + port, address, port, hashRange);
                 List<String> kvToTransfer = new ArrayList<String>();
                 if (nodes.size() > 1) {
-                    kvToTransfer = getKVPairsToTransfer(hashCode, getSuccessor(hashCode));
-                    ECSNode successor = (ECSNode) nodes.get(getSuccessor(hashCode));
-                    successor.getNodeHashRange()[0] = hashCode;
-                    logger.info("Added new node to the bst, current state of bst: " + nodes.print());
-                    try {
-                        logger.info("Transferring following data: " + kvToTransfer);
-                        sendMessage(ecsNode, new ECSMessage(ActionType.SET_WRITE_LOCK, true, null, null, nodes));
-                        sendMessage(ecsNode, new ECSMessage(ActionType.APPEND, true, kvToTransfer, null, nodes));
-                        sendMessage(ecsNode, new ECSMessage(ActionType.UNSET_WRITE_LOCK, true, null, null, nodes));
-                        sendMessage(successor, new ECSMessage(ActionType.REMOVE, true, null, hashRange, nodes));
-                        sendMessage(successor, new ECSMessage(ActionType.UNSET_WRITE_LOCK, true, null, null, nodes));
-                    } catch (Exception e) {
-                        logger.error(e);
+                    ECSNode successorNode = (ECSNode) nodes.get(getSuccessor(hashCode));
+                    if (dataTransfer(newNode, successorNode)) {
+                        nodes.put(hashCode, newNode);
+                        logger.info("Added new node to the bst, current state of bst: " + nodes.print());
+                        updateAllNodesMetaData();
                     }
-                    updateAllNodesMetaData();
-                    return new ECSMessage(ActionType.UPDATE_METADATA, true, null, null, nodes);
                 }
+                nodes.put(hashCode, newNode);
                 logger.info("Added new node to the bst, current state of bst: " + nodes.print());
                 updateAllNodesMetaData();
-                return new ECSMessage(ActionType.UPDATE_METADATA, true, kvToTransfer, null, nodes);
             }
+            logger.info("Unknown message type: " + message);
             updateAllNodesMetaData();
-            return new ECSMessage(ActionType.APPEND, true, null, null, nodes);
         }
     }
 
@@ -427,45 +413,92 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
 //        return serializeToString(new ECSMessage(ActionType.UPDATE_METADATA, true,null,null, null));
     //}
 
-    private List<String> addConnectedNewNode(int port, String address) {
-        String hashCode = HashUtils.getHash(address + ":" + port);
-        String[] hashRange = {getStartNodeHash(hashCode), hashCode};
-        ECSNode ecsNode = new ECSNode(address + ":" + port, address, port, hashRange);
-        nodes.put(hashCode, ecsNode);
-        if (nodes.size() > 1) {
-            List<String> kvToTransfer = getKVPairsToTransfer(hashCode, getSuccessor(hashCode));
-            ECSNode successor = (ECSNode) nodes.get(getSuccessor(hashCode));
-            successor.getNodeHashRange()[0] = hashCode;
-            return kvToTransfer;
+//    private List<String> addConnectedNewNode(int port, String address) {
+//        String hashCode = HashUtils.getHash(address + ":" + port);
+//        String[] hashRange = {getStartNodeHash(hashCode), hashCode};
+//        ECSNode ecsNode = new ECSNode(address + ":" + port, address, port, hashRange);
+//        nodes.put(hashCode, ecsNode);
+//        if (nodes.size() > 1) {
+//            List<String> kvToTransfer = getKVPairsToTransfer(hashCode, getSuccessor(hashCode));
+//            ECSNode successor = (ECSNode) nodes.get(getSuccessor(hashCode));
+//            successor.getNodeHashRange()[0] = hashCode;
+//            return kvToTransfer;
+//
+//        }
+//        return null;
+//    }
 
-        }
-        return null;
-    }
+//    private List<String> getKVPairsToTransfer(String newNode, String successor) {
+//        String minRange = getPredecessor(newNode); // Minimum value of the range
+//        String maxRange = newNode; // Maximum value of the range
+//
+//        try {
+//            ECSNode ecsNodeSuccessor = (ECSNode) nodes.get(successor);
+//            ECSNode ecsNewNode = (ECSNode) nodes.get(newNode);
+//            ECSMessage ecsMessage = sendMessage(ecsNodeSuccessor, new ECSMessage(ActionType.SET_WRITE_LOCK, true,
+//                    null, new String[]{minRange, minRange}, nodes));
+//            if (!ecsMessage.success) {
+//                logger.error("Received error while setting write lock on node: " + ecsNodeSuccessor.getNodeName() + ". Error: " + ecsMessage.getErrorMessage());
+//                return null;
+//            }
+//            logger.info("(In 'getKVPairsToTransfer'): Sending Message tp GET_DATA Keys to Node: " + ecsNodeSuccessor.getNodeName() + " range: " + minRange + "," + maxRange);
+//            ecsMessage = sendMessage(ecsNodeSuccessor, new ECSMessage(ActionType.TRANSFER, true,
+//                    null, new String[]{minRange, maxRange}, nodes));
+//            if (ecsMessage.success) {
+//                return ecsMessage.data;
+//            }
+//            return null;
+//        } catch (Exception ex) {
+//            logger.error(ex);
+//        }
+//        return null;
+//    }
 
-    private List<String> getKVPairsToTransfer(String newNode, String successor) {
-        String minRange = getPredecessor(newNode); // Minimum value of the range
-        String maxRange = newNode; // Maximum value of the range
-
+    private boolean dataTransfer(ECSNode newNode, ECSNode sucNode) {
         try {
-            ECSNode ecsNodeSuccessor = (ECSNode) nodes.get(successor);
-            ECSNode ecsNewNode = (ECSNode) nodes.get(newNode);
-            ECSMessage ecsMessage = sendMessage(ecsNodeSuccessor, new ECSMessage(ActionType.SET_WRITE_LOCK, true,
-                    null, new String[]{minRange, minRange}, nodes));
-            if (!ecsMessage.success) {
-                logger.error("Received error while setting write lock on node: " + ecsNodeSuccessor.getNodeName() + ". Error: " + ecsMessage.getErrorMessage());
-                return null;
+            ECSMessage newNodeMsg = new ECSMessage();
+            ECSMessage sucNodeMsg = new ECSMessage();
+            newNodeMsg.setAction(ActionType.SET_WRITE_LOCK);
+            sucNodeMsg.setAction(ActionType.SET_WRITE_LOCK);
+            ECSMessage newNodeResponse = sendMessage(newNode, newNodeMsg);
+            if (!newNodeResponse.success) {
+                logger.error("Set write lock failed on: " + newNode.getNodeName());
+                return false;
             }
-            logger.info("(In 'getKVPairsToTransfer'): Sending Message tp GET_DATA Keys to Node: " + ecsNodeSuccessor.getNodeName() + " range: " + minRange + "," + maxRange);
-            ecsMessage = sendMessage(ecsNodeSuccessor, new ECSMessage(ActionType.GET_DATA, true,
-                    null, new String[]{minRange, maxRange}, nodes));
-            if (ecsMessage.success) {
-                return ecsMessage.data;
+            ECSMessage sucNodeResponse = sendMessage(sucNode, sucNodeMsg);
+            if (!sucNodeResponse.success) {
+                logger.error("Set write lock failed on: " + sucNode.getNodeName());
+                return false;
             }
-            return null;
+            sucNodeMsg.setAction(ActionType.TRANSFER);
+            sucNodeMsg.setRange(newNode.nodeHashRange);
+            sucNodeMsg.setServerInfo(newNode.getNodeHost(), newNode.getNodePort());
+            sucNodeResponse = sendMessage(sucNode, sucNodeMsg);
+            if (sucNodeResponse.getAction() == ActionType.TRANSFER & sucNodeResponse.success) {
+                logger.info(String.format("Transfer data from %s to %s success.", sucNode.getNodeName(),
+                        newNode.getNodeName()));
+                // Unset write lock for new node
+                newNodeMsg.setAction(ActionType.UNSET_WRITE_LOCK);
+                sendMessage(newNode, newNodeMsg);
+                // Remove transferred data from successor node
+                sucNodeMsg.setAction(ActionType.REMOVE);
+                sucNodeResponse = sendMessage(sucNode, sucNodeMsg);
+                if (sucNodeResponse.getAction() == ActionType.REMOVE & sucNodeResponse.success) {
+                    logger.info(String.format("Remove data from %s success.", sucNode.getNodeName()));
+                    return true;
+                } else {
+                    logger.info(String.format("Remove data from %s failed.", sucNode.getNodeName()));
+                    return false;
+                }
+            } else {
+                logger.info(String.format("Transfer data from %s to %s failed.", sucNode.getNodeName(),
+                        newNode.getNodeName()));
+                return false;
+            }
         } catch (Exception ex) {
             logger.error(ex);
+            return false;
         }
-        return null;
     }
 
     public void updateAllNodesMetaData() {

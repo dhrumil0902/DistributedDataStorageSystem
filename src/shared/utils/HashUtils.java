@@ -45,4 +45,9 @@ public class HashUtils {
         }
         return false;
     }
+
+    public static void main(String[] args) {
+        String key = "key";
+        System.out.println(getHash(key));
+    }
 }

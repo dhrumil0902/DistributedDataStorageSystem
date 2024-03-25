@@ -15,6 +15,7 @@ import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.net.Socket;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.util.zip.*;
 import java.io.*;
@@ -144,8 +145,10 @@ public class ClientConnection implements Runnable {
                 kvServer.appendDataToStorage(msg.getData());
                 response.setSuccess(true);
                 break;
-            case GET_DATA:
-                logger.info("Received command GET_DATA: " + kvServer.getPort());
+            case TRANSFER:
+                logger.info("Received command TRANSFER: " + kvServer.getPort());
+                ECSMessage transferMsg = new ECSMessage();
+                transferMsg.setAction(ActionType.APPEND);
                 if (!kvServer.getWriteLock()) {
                     // write lock not set
                     response.setSuccess(false);
@@ -153,17 +156,17 @@ public class ClientConnection implements Runnable {
                     break;
                 }
                 if (range == null) {
-                    response.setData(kvServer.getAllData());
+                    transferMsg.setData(kvServer.getAllData());
                 } else {
                     logger.info("Setting data in response of port: " + kvServer.getPort());
-                    response.setData(kvServer.getData(range[0], range[1]));
+                    transferMsg.setData(kvServer.getData(range[0], range[1]));
                 }
-                if (response.getData() != null) {
-                    logger.info("Command GET_DATA successfully returning in: " + kvServer.getPort() + "'sending data of size: " + response.getData().size());
+                if (transferData(msg.getServerInfo()[0], Integer.parseInt(msg.getServerInfo()[1]), transferMsg)) {
                     response.setSuccess(true);
+                    logger.info("Successfully transfer data.");
                 } else {
                     response.setSuccess(false);
-                    response.setErrorMessage("Unable to append data.");
+                    logger.info("Failed to transfer data.");
                 }
                 break;
             case REMOVE:
@@ -185,15 +188,15 @@ public class ClientConnection implements Runnable {
                 }
                 break;
             case UPDATE_METADATA:
-                logger.info("Received command UPDATE_METADATA in: " + kvServer.getPort());
+                logger.info("Received command UPDATE_METADATA: " + kvServer.getPort());
                 kvServer.updateMetadata(msg.getNodes());
                 logger.info("Successfully updated metadata in: " + kvServer.getPort());
                 response.setSuccess(true);
                 break;
-//            case HEARTBEAT:
-//                logger.info("Received command HEARTBEAT: " + kvServer.getPort());
-//                response.setSuccess(true);
-//                break;
+            case HEARTBEAT:
+                logger.info("Received command HEARTBEAT: " + kvServer.getPort());
+                response.setSuccess(true);
+                break;
             case DELETE:
                 kvServer.close();
                 break;
@@ -283,54 +286,82 @@ public class ClientConnection implements Runnable {
         }
     }
 
-    private String checkWriteLockCondition(boolean requireLock) {
-        if (requireLock && !kvServer.getWriteLock()) {
-            return "Write lock not set.";
-        } else if (!requireLock && kvServer.getWriteLock()) {
-            return "Write lock already set.";
-        }
-        return null; // indicates no error
-    }
-
-
-    public void transferData(String address, int port) {
-        kvServer.syncCacheToStorage();
-        String filePath = kvServer.getStoragePath();
-
+    public boolean transferData(String address, int port, ECSMessage msg) {
         try (Socket socket = new Socket(address, port);
-             FileInputStream fis = new FileInputStream(filePath);
-             BufferedInputStream bis = new BufferedInputStream(fis);
-             OutputStream out = socket.getOutputStream();
-             ZipOutputStream zos = new ZipOutputStream(out);
-             InputStream in = socket.getInputStream();
-             BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
-
-            // Send initiation message
-            out.write(("BEGIN_TRANSFER\n").getBytes(StandardCharsets.UTF_8));
-            out.flush();
-
-            // Compress and send data
-            ZipEntry zipEntry = new ZipEntry(new File(filePath).getName());
-            zos.putNextEntry(zipEntry);
-            byte[] buffer = new byte[1024];
-            int count;
-            while ((count = bis.read(buffer)) > 0) {
-                zos.write(buffer, 0, count);
+             BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+             BufferedWriter output = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8));
+        ) {
+            ObjectMapper mapper = new ObjectMapper();
+            try {
+                String jsonString = mapper.writeValueAsString(msg);
+                output.write(jsonString);
+                output.newLine();
+                output.flush();
+            } catch (JsonProcessingException e) {
+                logger.error("Failed to parse ECSMessage.");
+            } catch (IOException e) {
+                logger.error("Failed to send ECSMessage.");
             }
-            zos.closeEntry();
-            zos.finish();
 
-            // Wait for confirmation
-            String msg = reader.readLine();
-            if ("DATA_RECEIVED".equals(msg)) {
-                logger.info(String.format("Successfully transferred data to SERVER %s:%d", address, port));
-            } else {
-                logger.error(String.format("Failed to transfer data to SERVER %s:%d", address, port));
+            String str_msg = input.readLine();
+            try {
+                ECSMessage obj_msg = mapper.readValue(str_msg, ECSMessage.class);
+                return  obj_msg.getAction() == ActionType.APPEND & obj_msg.getSuccess();
+            } catch (JsonMappingException ex) {
+                logger.error("Error during message deserialization.", ex);
+            } catch (IOException ex) {
+                logger.error("IO error during message deserialization.", ex);
             }
+        } catch (UnknownHostException e) {
+            logger.error(String.format("Connect to %s:%s failed: socket error.", address, port));
         } catch (IOException e) {
-            logger.error(String.format("Failed to transfer data to SERVER %s:%d", address, port), e);
+            logger.error(String.format("Connect to %s:%s failed: Input&output stream error.", address, port));
         }
+        return false;
     }
+
+    public void updateReplica() {
+
+    }
+
+//    public void transferData(String address, int port) {
+//        kvServer.syncCacheToStorage();
+//        String filePath = kvServer.getStoragePath();
+//
+//        try (Socket socket = new Socket(address, port);
+//             FileInputStream fis = new FileInputStream(filePath);
+//             BufferedInputStream bis = new BufferedInputStream(fis);
+//             OutputStream out = socket.getOutputStream();
+//             ZipOutputStream zos = new ZipOutputStream(out);
+//             InputStream in = socket.getInputStream();
+//             BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
+//
+//            // Send initiation message
+//            out.write(("BEGIN_TRANSFER\n").getBytes(StandardCharsets.UTF_8));
+//            out.flush();
+//
+//            // Compress and send data
+//            ZipEntry zipEntry = new ZipEntry(new File(filePath).getName());
+//            zos.putNextEntry(zipEntry);
+//            byte[] buffer = new byte[1024];
+//            int count;
+//            while ((count = bis.read(buffer)) > 0) {
+//                zos.write(buffer, 0, count);
+//            }
+//            zos.closeEntry();
+//            zos.finish();
+//
+//            // Wait for confirmation
+//            String msg = reader.readLine();
+//            if ("DATA_RECEIVED".equals(msg)) {
+//                logger.info(String.format("Successfully transferred data to SERVER %s:%d", address, port));
+//            } else {
+//                logger.error(String.format("Failed to transfer data to SERVER %s:%d", address, port));
+//            }
+//        } catch (IOException e) {
+//            logger.error(String.format("Failed to transfer data to SERVER %s:%d", address, port), e);
+//        }
+//    }
 
 
     private void receiveData() {

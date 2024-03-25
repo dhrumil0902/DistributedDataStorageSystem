@@ -82,22 +82,22 @@ public class ServerConnection implements Runnable{
 			isOpen = false;
 			return;
 		}
-		ECSMessage response = new ECSMessage();
+//		ECSMessage response = new ECSMessage();
 		switch (msg.getAction()) {
 			case NEW_NODE:
 				if (msg.getServerInfo() != null && msg.getServerInfo().length == 2) {
 					String address = msg.getServerInfo()[0];
 					try {
 						int port = Integer.parseInt(msg.getServerInfo()[1]);
-						response = ecsServer.onMessageReceived("New Node", port,address);
+						ecsServer.onMessageReceived("New Node", port,address);
 					} catch (NumberFormatException e) {
 						logger.error("Invalid port number: " + msg.getServerInfo()[1], e);
 						// Optionally, set response failure or other fields here
-						response.setSuccess(false);
+//						response.setSuccess(false);
 					}
 				} else {
 					logger.error("Server info (address and port) not properly set in ECSMessage.");
-					response.setSuccess(false);
+//					response.setSuccess(false);
 				}
 				break;
 			case DELETE:
@@ -118,7 +118,6 @@ public class ServerConnection implements Runnable{
 			default:
 				logger.error("Unknown action.");
 		}
-		sendMessage(response);
 	}
 	private void sendMessage(ECSMessage responseMessage) throws IOException {
 		ObjectMapper mapper = new ObjectMapper();

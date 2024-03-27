@@ -1,6 +1,7 @@
 package ecs;
 
 import java.io.Serializable;
+import java.util.List;
 
 public class ECSNode implements IECSNode, Serializable {
     private String nodeName;
@@ -10,6 +11,8 @@ public class ECSNode implements IECSNode, Serializable {
     private int cacheSize;
     public String dBStoragePath;
     private String strategy;
+    private List<ECSNode> predecessors;
+    private List<ECSNode> successors;
 
     public ECSNode() {}
 
@@ -49,4 +52,7 @@ public class ECSNode implements IECSNode, Serializable {
         return nodeHashRange;
     }
 
+    public List<ECSNode> getPredecessors() {return predecessors;}
+
+    public List<ECSNode> getSuccessors() {return successors;}
 }

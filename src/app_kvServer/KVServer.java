@@ -15,6 +15,7 @@ import app_kvServer.kvCache.LFUCache;
 import app_kvServer.kvCache.LRUCache;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import ecs.ECSNode;
 import shared.BST;
 import shared.messages.ECSMessage;
 import shared.messages.ECSMessage.ActionType;
@@ -60,6 +61,8 @@ public class KVServer implements IKVServer, Runnable {
     private BST metadata;
     private boolean writeLock;
     private List<ClientConnection> clientConnections = new ArrayList<ClientConnection>();
+    private List<AddressPortPair> coordinators = new ArrayList<>(2);
+    private List<AddressPortPair> replications = new ArrayList<>(2);
 
 //    public KVServer(int port, int cacheSize, String strategy) {
 //        this(port, cacheSize, strategy, "localhost", System.getProperty("user.dir"));
@@ -587,6 +590,18 @@ public class KVServer implements IKVServer, Runnable {
 
     public BST getMetadata() {
         return this.metadata;
+    }
+
+    public void setCoordinators(ECSNode node) {
+        for (ECSNode predecessor : node.getPredecessors()) {
+            this.coordinators.add(new AddressPortPair(predecessor.getNodeHost(), predecessor.getNodePort()));
+        }
+    }
+
+    public void setReplications(ECSNode node) {
+        for (ECSNode successor : node.getSuccessors()) {
+            this.coordinators.add(new AddressPortPair(successor.getNodeHost(), successor.getNodePort()));
+        }
     }
 
     public boolean checkRegisterStatus() {return this.register;}

@@ -1,6 +1,7 @@
 package ecs;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.List;
 
 public class ECSNode implements IECSNode, Serializable {
@@ -11,8 +12,8 @@ public class ECSNode implements IECSNode, Serializable {
     private int cacheSize;
     public String dBStoragePath;
     private String strategy;
-    private List<ECSNode> predecessors;
-    private List<ECSNode> successors;
+    private List<ECSNode> predecessors = new ArrayList<>(2);;
+    private List<ECSNode> successors = new ArrayList<>(2);;
 
     public ECSNode() {}
 
@@ -55,4 +56,17 @@ public class ECSNode implements IECSNode, Serializable {
     public List<ECSNode> getPredecessors() {return predecessors;}
 
     public List<ECSNode> getSuccessors() {return successors;}
+
+    public void setSuccessors(List<ECSNode> newSuccessors) {
+        if (newSuccessors == null) {
+            throw new IllegalArgumentException("Successor list cannot be null.");
+        }
+        if (newSuccessors.size() > 2) {
+            throw new IllegalArgumentException("Successor list cannot contain more than two elements.");
+        }
+
+        // Clear the current successors list and add all from the new list
+        this.successors.clear();
+        this.successors.addAll(newSuccessors);
+    }
 }

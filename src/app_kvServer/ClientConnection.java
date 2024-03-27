@@ -5,11 +5,13 @@ import org.apache.log4j.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonMappingException;
 
+import shared.messages.CoordMessage;
 import shared.messages.ECSMessage;
 import shared.messages.KVMessage;
 import shared.messages.KVMessageImpl;
 import shared.messages.ECSMessage.ActionType;
 import shared.messages.KVMessage.StatusType;
+import shared.utils.CommUtils;
 
 import java.io.BufferedInputStream;
 import java.io.File;
@@ -21,6 +23,7 @@ import java.util.zip.*;
 import java.io.*;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
+
 
 
 public class ClientConnection implements Runnable {
@@ -72,27 +75,32 @@ public class ClientConnection implements Runnable {
                 isOpen = false;
                 return;
             }
-
             try {
                 // Attempt to deserialize the message as KVMessage first
                 KVMessage message = KVMessageImpl.fromString(msg);
                 logger.info("Receive KVMessage.");
                 logger.info("Message: " + msg);
                 handleKVMessage(message);
-            } catch (IllegalArgumentException e) {
-                // If deserialization fails, it might be an ECSMessage, so try that next
-                logger.info("Receive ECSMessage.");
+            } catch (IllegalArgumentException kvEx) {
+                logger.info("Not a KVMessage, trying ECSMessage.");
                 try {
                     ECSMessage obj = new ObjectMapper().readValue(msg, ECSMessage.class);
+                    logger.info("Receive ECSMessage.");
                     handleECSMessage(obj);
-                } catch (JsonMappingException ex) {
-                    logger.error("Error during message deserialization.", ex);
-                } catch (IOException ex) {
-                    logger.error("IO error during message deserialization.", ex);
+                } catch (JsonMappingException ecsEx) {
+                    logger.info("Not an ECSMessage, trying CoordMessage.");
+                    try {
+                        CoordMessage coordMessage = new ObjectMapper().readValue(msg, CoordMessage.class);
+                        logger.info("Received CoordMessage.");
+                        handleCoordMessage(coordMessage);
+                    } catch (JsonProcessingException coordEx) {
+                        logger.error("Error during CoordMessage deserialization.", coordEx);
+                    }
+                } catch (IOException ecsEx) {
+                    logger.error("IO error during ECSMessage  deserialization.", ecsEx);
                 }
             }
         } catch (IOException e) {
-//            logger.error("Error during message reception.", e);
             logger.info("Connection closed by the client.");
             isOpen = false;
         }
@@ -203,8 +211,32 @@ public class ClientConnection implements Runnable {
             default:
                 logger.error("Unknown message from ECS: " + msg);
         }
-        sendECSMessage(response);
+        CommUtils.sendECSMessage(response, this.output);
+//        sendECSMessage(response);
         isOpen = false;
+    }
+
+    private void handleCoordMessage(CoordMessage message) {
+        CoordMessage.ActionType action = message.getAction();
+        CoordMessage response = new CoordMessage();
+        response.setAction(action);
+        switch (action) {
+            case PUT:
+                logger.info("Received command PUT from coordinator.");
+                try {
+                    kvServer.putKV(message.getKey(), message.getValue());
+                    response.isSuccess = true;
+                } catch (Exception e) {
+                    logger.error(String.format("Replica put %s:%s failed.", message.getKey(), message.getValue()));
+                    response.isSuccess = false;
+                }
+                break;
+            case UPDATE:
+                logger.info("Received command UPDATE from coordinator.");
+
+                break;
+        }
+        CommUtils.sendCoordMessage(response, this.output);
     }
 
     private void handleKVMessage(KVMessage msg) {
@@ -253,20 +285,6 @@ public class ClientConnection implements Runnable {
         }
         logger.info("Sending message: " + response.toString());
         sendKVMessage(response.toString());
-    }
-
-    private void sendECSMessage(ECSMessage message)  {
-        ObjectMapper mapper = new ObjectMapper();
-        try {
-            String jsonString = mapper.writeValueAsString(message);
-            output.write(jsonString);
-            output.newLine();
-            output.flush();
-        } catch (JsonProcessingException e) {
-            logger.error("Failed to parse ECSMessage.");
-        } catch (IOException e) {
-            logger.error("Failed to send ECSMessage.");
-        }
     }
 
     public void sendKVMessage(String msg) {
@@ -320,9 +338,7 @@ public class ClientConnection implements Runnable {
         return false;
     }
 
-    public void updateReplica() {
 
-    }
 
 //    public void transferData(String address, int port) {
 //        kvServer.syncCacheToStorage();

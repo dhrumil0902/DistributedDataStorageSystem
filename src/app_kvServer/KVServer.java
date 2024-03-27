@@ -1,9 +1,7 @@
 package app_kvServer;
 
 import java.io.*;
-import java.net.BindException;
-import java.net.ServerSocket;
-import java.net.Socket;
+import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,17 +15,17 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import ecs.ECSNode;
 import shared.BST;
+import shared.messages.CoordMessage;
 import shared.messages.ECSMessage;
 import shared.messages.ECSMessage.ActionType;
 import shared.messages.KVMessage;
 import shared.messages.KVMessage.StatusType;
 import shared.messages.KVMessageImpl;
+import shared.utils.CommUtils;
 import shared.utils.HashUtils;
 import logger.LogSetup;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-
-import java.net.InetSocketAddress;
 
 
 import java.util.Map;
@@ -58,6 +56,8 @@ public class KVServer implements IKVServer, Runnable {
     private IKVCache cache;
     private KVStorage storage;
     private final Object lock = new Object();
+    private String serverName;
+    private String hashValue;
     private BST metadata;
     private boolean writeLock;
     private List<ClientConnection> clientConnections = new ArrayList<ClientConnection>();
@@ -80,6 +80,8 @@ public class KVServer implements IKVServer, Runnable {
         this.writeLock = false;
         this.metadata = null;
         this.register = false;
+        this.serverName = address + ":" + port;
+        this.hashValue = HashUtils.getHash(serverName);
         try {
             this.strategy = CacheStrategy.valueOf(strategy);
         } catch (IllegalArgumentException e) {
@@ -459,7 +461,7 @@ public class KVServer implements IKVServer, Runnable {
         logger.info(">>>>>");
         logger.info("Target server name: " + metadata.getNodeFromKey(HashUtils.getHash(key)).getNodeName());
         logger.info("Current server name: " + address + ":" + port);
-        return metadata.getNodeFromKey(HashUtils.getHash(key)).getNodeName().equals(address + ":" + port);
+        return metadata.getNodeFromKey(HashUtils.getHash(key)).getNodeName().equals(this.serverName);
     }
 
     public KVMessage handleGetMessage(KVMessage message) {
@@ -592,6 +594,8 @@ public class KVServer implements IKVServer, Runnable {
         return this.metadata;
     }
 
+    public String getHashValue() {return this.hashValue;}
+
     public void setCoordinators(ECSNode node) {
         for (ECSNode predecessor : node.getPredecessors()) {
             this.coordinators.add(new AddressPortPair(predecessor.getNodeHost(), predecessor.getNodePort()));
@@ -599,8 +603,26 @@ public class KVServer implements IKVServer, Runnable {
     }
 
     public void setReplications(ECSNode node) {
+//        logger.info("In setReplications");
         for (ECSNode successor : node.getSuccessors()) {
-            this.coordinators.add(new AddressPortPair(successor.getNodeHost(), successor.getNodePort()));
+            this.replications.add(new AddressPortPair(successor.getNodeHost(), successor.getNodePort()));
+        }
+//        logger.info(this.replications);
+    }
+
+    public void updateReplica(CoordMessage message) {
+        for (AddressPortPair replicaInfo : this.replications) {
+            try (Socket socket = new Socket(replicaInfo.getAddress(), replicaInfo.getPort());
+                 BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+                 BufferedWriter output = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8))
+            ) {
+                CommUtils.sendCoordMessage(message, output);
+                logger.info("Successfully update replicas.");
+            } catch (UnknownHostException e) {
+                logger.error(String.format("Unknown replica %s:%s", replicaInfo.getAddress(), replicaInfo.getPort()));
+            } catch (IOException e) {
+                logger.error(String.format("Failed to connect to %s:%s", replicaInfo.getAddress(), replicaInfo.getPort()));
+            }
         }
     }
 

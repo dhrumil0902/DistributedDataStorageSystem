@@ -9,10 +9,13 @@ import org.junit.Assert;
 import org.junit.Test;
 import app_kvECS.ECSClient;
 import junit.framework.TestCase;
+import shared.BST;
+import shared.messages.CoordMessage;
 import shared.utils.HashUtils;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class AdditionalTest extends TestCase {
@@ -238,11 +241,13 @@ public class AdditionalTest extends TestCase {
     public void testTempTest() {
         try {
             new LogSetup("test3.log", Level.ALL);
-            ECSClient client = new ECSClient("localhost", 5100);
-            KVServer server0 = new KVServer("localhost", 5100, "localhost", 46683, 0, "None", System.getProperty("user.dir"));
+            ECSClient ecs = new ECSClient("localhost", 5100);
+            KVServer server0 = new KVServer("localhost", 5100, "localhost", 46683,
+                    0, "None", System.getProperty("user.dir"));
             Thread.sleep(2000);
             server0.putKV("key", "val");
-            KVServer server1 = new KVServer("localhost", 5100, "localhost", 42609, 0, "None", System.getProperty("user.dir"));
+            KVServer server1 = new KVServer("localhost", 5100, "localhost", 42609,
+                    0, "None", System.getProperty("user.dir"));
             KVServer server2 = new KVServer("localhost", 5100, "localhost", 42157, 0, "None", System.getProperty("user.dir"));
             KVServer server3 = new KVServer("localhost", 5100, "localhost", 38977, 0, "None", System.getProperty("user.dir"));
             KVServer server4 = new KVServer("localhost", 5100, "localhost", 44791, 0, "None", System.getProperty("user.dir"));
@@ -250,6 +255,42 @@ public class AdditionalTest extends TestCase {
             Thread.sleep(3000);
             System.out.println(server2.getKV("key"));
             System.out.println(server0.getKV("key"));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Test
+    public void testUpdateReplica() {
+        try {
+            new LogSetup("test3.log", Level.ALL);
+            ECSClient ecs = new ECSClient("localhost", 5100);
+            KVServer server0 = new KVServer("localhost", 5100, "localhost", 46683,
+                    0, "None", System.getProperty("user.dir"));
+            Thread.sleep(2000);
+            server0.putKV("key", "val");
+            KVServer server1 = new KVServer("localhost", 5100, "localhost", 42609,
+                    0, "None", System.getProperty("user.dir"));
+            Thread.sleep(2000);
+            BST metadata = server0.getMetadata();
+            ECSNode server0Node = (ECSNode) metadata.get(server0.getHashValue());
+            ECSNode server1Node = (ECSNode) metadata.get(server1.getHashValue());
+            List<ECSNode> successors = Arrays.asList(server1Node);
+            server0Node.setSuccessors(successors);
+            server0.setReplications(server0Node);
+            CoordMessage message = new CoordMessage();
+            message.setAction(CoordMessage.ActionType.PUT);
+            message.setKey("key");
+            message.setValue("val");
+            server0.updateReplica(message);
+            Thread.sleep(2000);
+            System.out.println(server0.getMetadata().print());
+            System.out.println(server0.getKV("key"));
+            System.out.println(server1.getKV("key"));
         } catch (IOException e) {
             throw new RuntimeException(e);
         } catch (InterruptedException e) {

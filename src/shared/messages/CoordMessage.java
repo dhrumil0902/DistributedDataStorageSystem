@@ -1,5 +1,9 @@
 package shared.messages;
 
+import app_kvServer.KVServer;
+import app_kvServer.KVStorage;
+import ecs.ECSNode;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
@@ -18,12 +22,15 @@ public class CoordMessage implements Serializable {
     private List<String> data;
     public boolean isSuccess;
 
-    public CoordMessage() {
+    public String hashValueofSendingServer;
+
+    public CoordMessage(String hashValueofSendingServer) {
         this.action = null;
         this.isSuccess = false;
         this.data = new ArrayList<>();
         this.key = null;
         this.value = null;
+        this.hashValueofSendingServer = hashValueofSendingServer;
     }
 
     public ActionType getAction() {

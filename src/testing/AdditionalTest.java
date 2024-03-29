@@ -2,10 +2,8 @@ package testing;
 
 import app_kvServer.KVServer;
 import ecs.ECSNode;
-import ecs.IECSNode;
 import logger.LogSetup;
 import org.apache.log4j.Level;
-import org.junit.Assert;
 import org.junit.Test;
 import app_kvECS.ECSClient;
 import junit.framework.TestCase;
@@ -14,7 +12,6 @@ import shared.messages.CoordMessage;
 import shared.utils.HashUtils;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -272,17 +269,23 @@ public class AdditionalTest extends TestCase {
             KVServer server0 = new KVServer("localhost", 5100, "localhost", 46683,
                     0, "None", System.getProperty("user.dir"));
             Thread.sleep(2000);
-            server0.putKV("key", "val");
+            // server0.putKV("key", "val");
             KVServer server1 = new KVServer("localhost", 5100, "localhost", 42609,
                     0, "None", System.getProperty("user.dir"));
             Thread.sleep(2000);
-            BST metadata = server0.getMetadata();
+            KVServer server2 = new KVServer("localhost", 5100, "localhost", 42610,
+                    0, "None", System.getProperty("user.dir"));
+            Thread.sleep(2000);
+            KVServer server3 = new KVServer("localhost", 5100, "localhost", 47670,
+                    0, "None", System.getProperty("user.dir"));
+            Thread.sleep(2000);
+            /*BST metadata = server2.getMetadata();
             ECSNode server0Node = (ECSNode) metadata.get(server0.getHashValue());
             ECSNode server1Node = (ECSNode) metadata.get(server1.getHashValue());
             List<ECSNode> successors = Arrays.asList(server1Node);
-            server0Node.setSuccessors(successors);
-            server0.setReplications(server0Node);
-            CoordMessage message = new CoordMessage();
+            // server0Node.setSuccessors(successors);
+            // server0.setReplicationsOfThisServer(server0Node);
+            CoordMessage message = new CoordMessage(server0.getHashValue());
             message.setAction(CoordMessage.ActionType.PUT);
             message.setKey("key");
             message.setValue("val");
@@ -290,7 +293,7 @@ public class AdditionalTest extends TestCase {
             Thread.sleep(2000);
             System.out.println(server0.getMetadata().print());
             System.out.println(server0.getKV("key"));
-            System.out.println(server1.getKV("key"));
+            System.out.println(server1.getKV("key"));*/
         } catch (IOException e) {
             throw new RuntimeException(e);
         } catch (InterruptedException e) {

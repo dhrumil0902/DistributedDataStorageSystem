@@ -14,7 +14,7 @@ import java.util.List;
 
 public class KVStorage {
     private final File file;
-    private final Path filePath;
+    public final Path filePath;
 
     private static Logger logger = Logger.getRootLogger();
 

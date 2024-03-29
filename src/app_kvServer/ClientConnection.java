@@ -198,7 +198,7 @@ public class ClientConnection implements Runnable {
             case UPDATE_METADATA:
                 logger.info("Received command UPDATE_METADATA: " + kvServer.getPort());
                 kvServer.updateMetadata(msg.getNodes());
-                logger.info("Successfully updated metadata in: " + kvServer.getPort());
+                logger.info("Successfully updated metadata and replication info in: " + kvServer.getPort());
                 response.setSuccess(true);
                 break;
             case HEARTBEAT:
@@ -218,13 +218,14 @@ public class ClientConnection implements Runnable {
 
     private void handleCoordMessage(CoordMessage message) {
         CoordMessage.ActionType action = message.getAction();
-        CoordMessage response = new CoordMessage();
+        String hashValueofSendingServer = message.hashValueofSendingServer;
+        CoordMessage response = new CoordMessage(kvServer.getHashValue());
         response.setAction(action);
         switch (action) {
             case PUT:
                 logger.info("Received command PUT from coordinator.");
                 try {
-                    kvServer.putKV(message.getKey(), message.getValue());
+                    kvServer.putKVForReplica(message.getKey(), message.getValue(), hashValueofSendingServer);
                     response.isSuccess = true;
                 } catch (Exception e) {
                     logger.error(String.format("Replica put %s:%s failed.", message.getKey(), message.getValue()));

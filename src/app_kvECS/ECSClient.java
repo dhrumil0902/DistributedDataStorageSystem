@@ -377,15 +377,15 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
                 String[] hashRange = {getStartNodeHash(hashCode), hashCode};
                 ECSNode newNode = new ECSNode(address + ":" + port, address, port, hashRange);
                 List<String> kvToTransfer = new ArrayList<String>();
+                nodes.put(hashCode, newNode);
                 if (nodes.size() > 1) {
                     ECSNode successorNode = (ECSNode) nodes.get(getSuccessor(hashCode));
+                    successorNode.getNodeHashRange()[0] = hashCode;
                     if (dataTransfer(newNode, successorNode)) {
-                        nodes.put(hashCode, newNode);
                         logger.info("Added new node to the bst, current state of bst: " + nodes.print());
                         updateAllNodesMetaData();
                     }
                 }
-                nodes.put(hashCode, newNode);
                 logger.info("Added new node to the bst, current state of bst: " + nodes.print());
                 updateAllNodesMetaData();
             }
@@ -502,6 +502,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
     }
 
     public void updateAllNodesMetaData() {
+        updateSuccessorAndPredecessorsInfo();
         logger.info("Starting update of meta data of all nodes ...");
         for (ECSNode node : nodes.values()) {
             try {
@@ -511,6 +512,50 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
             }
         }
         logger.info("Finished updating meta data of all nodes ...");
+    }
+
+    private void updateSuccessorAndPredecessorsInfo() {
+        if (nodes.isEmpty()){
+            return;
+        }
+        Collection<ECSNode> currentNodes = nodes.values();
+        for (ECSNode node : currentNodes) {
+            try {
+                node.predecessors = getPredecessorsList(node);
+                node.successors = getSucessorsList(node);
+            } catch (Exception e) {
+                logger.error("Could not successfully update the successor and predecessor of all nodes, error: " + e);
+            }
+        }
+        logger.info("Finished updating successors and predecessors data of all nodes ...");
+    }
+
+    private List<String> getPredecessorsList(ECSNode node) {
+        List<String> predecessorsList = new ArrayList<>();
+        if (nodes.size() == 1){
+            return predecessorsList;
+        }
+        if (nodes.size() == 2){
+            predecessorsList.add(getPredecessor(node.getNodeHashRange()[1]));
+            return predecessorsList;
+        }
+        predecessorsList.add(getPredecessor(node.getNodeHashRange()[1]));
+        predecessorsList.add(getPredecessor(predecessorsList.get(0)));
+        return predecessorsList;
+    }
+
+    private List<String> getSucessorsList(ECSNode node) {
+        List<String> getSuccessorsList = new ArrayList<>();
+        if (nodes.size() == 1){
+            return getSuccessorsList;
+        }
+        if (nodes.size() == 2){
+            getSuccessorsList.add(getSuccessor(node.getNodeHashRange()[1]));
+            return getSuccessorsList;
+        }
+        getSuccessorsList.add(getSuccessor(node.getNodeHashRange()[1]));
+        getSuccessorsList.add(getSuccessor(getSuccessorsList.get(0)));
+        return getSuccessorsList;
     }
 
     public ECSMessage sendMessage(ECSNode node, ECSMessage msg) throws Exception {

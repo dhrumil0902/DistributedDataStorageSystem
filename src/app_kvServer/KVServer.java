@@ -3,8 +3,7 @@ package app_kvServer;
 import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.AbstractMap.SimpleEntry;
 
 import app_kvServer.kvCache.FIFOCache;
@@ -27,9 +26,6 @@ import logger.LogSetup;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
-
-import java.util.Map;
-
 public class KVServer implements IKVServer, Runnable {
     /**
      * Start KV Server at given port
@@ -43,6 +39,7 @@ public class KVServer implements IKVServer, Runnable {
      * and "LFU".
      */
     private static Logger logger = Logger.getRootLogger();
+    public final String storageDir;
     private String address;
     private int port;
     private String ecsAddress;
@@ -52,7 +49,7 @@ public class KVServer implements IKVServer, Runnable {
     private ServerSocket serverSocket;
     private boolean running;
     private boolean register;
-    private String storagePath;
+    public String storagePath;
     private IKVCache cache;
     private KVStorage storage;
     private final Object lock = new Object();
@@ -61,8 +58,12 @@ public class KVServer implements IKVServer, Runnable {
     private BST metadata;
     private boolean writeLock;
     private List<ClientConnection> clientConnections = new ArrayList<ClientConnection>();
-    private List<AddressPortPair> coordinators = new ArrayList<>(2);
-    private List<AddressPortPair> replications = new ArrayList<>(2);
+    private List<String> coordinators = new ArrayList<>(2);
+    private List<String> replicationsOfThisServer = new ArrayList<>(2);
+    private Map<String, KVStorage> replicationsStored = new HashMap<>(2); //hashvalue and storage
+
+
+
 
 //    public KVServer(int port, int cacheSize, String strategy) {
 //        this(port, cacheSize, strategy, "localhost", System.getProperty("user.dir"));
@@ -72,6 +73,7 @@ public class KVServer implements IKVServer, Runnable {
                     String storageDir) {
         String fileName = address + "_" + port + ".txt";
         this.storagePath = storageDir + File.separator + fileName;
+        this.storageDir = storageDir;
         this.ecsAddress = ecsAddress;
         this.ecsPort = ecsPort;
         this.address = address;
@@ -148,6 +150,58 @@ public class KVServer implements IKVServer, Runnable {
         return false;
     }
 
+    public void addReplicationFile(String hashValue) {
+        if (metadata == null || metadata.get(hashValue) == null) {
+            logger.error("Metadata is null or does not contain hash value " + hashValue);
+            return;
+        }
+
+        // Get the node name from metadata using the hash value
+        String nodeName = metadata.get(hashValue).getNodeName();
+
+        // Check if the hash value already exists in the map
+        if (replicationsStored.containsKey(hashValue)) {
+            logger.warn("Data file for hash value " + hashValue + " already exists.");
+        } else {
+            String fileName = metadata.get(this.getHashValue()).getNodePort() + "_" + nodeName + ".txt";
+            String path = this.storageDir + File.separator + fileName;
+            KVStorage storage = new KVStorage(path);
+            replicationsStored.put(hashValue, storage);
+            logger.info("Added replication data file for node " + nodeName + " at " + path);
+        }
+    }
+
+    public List<String> removeReplicationFileAndGetAllData(String hashValue) {
+        // Check if the hash value exists in the map
+        if (replicationsStored.containsKey(hashValue)) {
+            // Retrieve the KVStorage object associated with the hash value
+            KVStorage storage = replicationsStored.get(hashValue);
+            if (storage != null) {
+                // Get all data from the storage
+                List<String> allData = null;
+                try {
+                    allData = storage.getAllData();
+                } catch (IOException e) {
+                    logger.error("Unable to get all data from the storage.");
+                    return new ArrayList<>();
+                }
+                // Remove the KVStorage object associated with the hash value
+                KVStorage removedStorage = replicationsStored.remove(hashValue);
+                if (removedStorage != null) {
+                    logger.info("Removed replication data file for hash value " + hashValue);
+                    return allData;
+                } else {
+                    logger.warn("Failed to remove replication data file for hash value " + hashValue);
+                }
+            } else {
+                logger.warn("Replication data file for hash value " + hashValue + " is null.");
+            }
+        } else {
+            logger.warn("Replication data file for hash value " + hashValue + " does not exist.");
+        }
+        return null; // Return null if removal fails or if hash value does not exist in the map
+    }
+
     @Override
     public String getKV(String key) throws Exception {
         logger.info("SERVER: Retrieve value for key: " + key);
@@ -189,6 +243,34 @@ public class KVServer implements IKVServer, Runnable {
         if (cache == null) {
             try {
                 storage.putKV(key, value);
+                return;
+            } catch (RuntimeException e) {
+                throw new Exception(e.getMessage());
+            }
+        }
+        // Put kv to cache
+        SimpleEntry<String, String> evicted = cache.putKV(key, value);
+        if (evicted != null) {
+            try {
+                writeEvictedToStorage(evicted.getKey(), evicted.getValue());
+            } catch (RuntimeException e) {
+                throw new Exception(e.getMessage());
+            }
+        }
+    }
+
+    public void putKVForReplica(String key, String value, String hashValue) throws Exception {
+        logger.info("Storage file path: " + storage.filePath);
+        logger.info(String.format("PutKV: %s %s", key, value));
+
+        if (!replicationsStored.containsKey(hashValue)){
+           // addReplicationFile(hashValue);
+        }
+        KVStorage replicaStorage = replicationsStored.get(hashValue);
+        // Put kv to storage
+        if (cache == null) {
+            try {
+                replicaStorage.putKV(key, value);
                 return;
             } catch (RuntimeException e) {
                 throw new Exception(e.getMessage());
@@ -576,10 +658,20 @@ public class KVServer implements IKVServer, Runnable {
         if (this.metadata == null) {
             logger.info("Register to ECS success.");
             this.metadata = metadata;
+            updateReplicaInfo();
+            // updateSuccessorAndPredecessorsInfo();
             this.register = true;
             return;
         }
         this.metadata = metadata;
+    }
+
+    private void updateReplicaInfo() {
+    ECSNode node = (ECSNode) metadata.get(this.getHashValue());
+        replicationsOfThisServer = node.successors;
+        for (String hashofPredecessors: node.predecessors ) {
+            addReplicationFile(hashofPredecessors);
+        }
     }
 
     public boolean getWriteLock() {
@@ -597,31 +689,32 @@ public class KVServer implements IKVServer, Runnable {
     public String getHashValue() {return this.hashValue;}
 
     public void setCoordinators(ECSNode node) {
-        for (ECSNode predecessor : node.getPredecessors()) {
-            this.coordinators.add(new AddressPortPair(predecessor.getNodeHost(), predecessor.getNodePort()));
+        for (String predecessor : node.getPredecessors()) {
+            ECSNode nodePredeseccor = (ECSNode) metadata.get(predecessor);
+            //this.coordinators.add(new AddressPortPair(nodePredeseccor.getNodeHost(), nodePredeseccor.getNodePort()));
         }
     }
 
-    public void setReplications(ECSNode node) {
-//        logger.info("In setReplications");
-        for (ECSNode successor : node.getSuccessors()) {
-            this.replications.add(new AddressPortPair(successor.getNodeHost(), successor.getNodePort()));
+    public void setReplicationsOfThisServer(ECSNode node) {
+        for (String predecessor : node.getSuccessors()) {
+            ECSNode nodePredeseccor = (ECSNode) metadata.get(predecessor);
+            //his.coordinators.add(new AddressPortPair(nodePredeseccor.getNodeHost(), nodePredeseccor.getNodePort()));
         }
-//        logger.info(this.replications);
     }
 
     public void updateReplica(CoordMessage message) {
-        for (AddressPortPair replicaInfo : this.replications) {
-            try (Socket socket = new Socket(replicaInfo.getAddress(), replicaInfo.getPort());
+        for (String hashValofReplica : this.replicationsOfThisServer) {
+            ECSNode replicaInfo = (ECSNode) metadata.get(hashValofReplica);
+            try (Socket socket = new Socket(replicaInfo.getNodeHost(), replicaInfo.getNodePort());
                  BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
                  BufferedWriter output = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8))
             ) {
                 CommUtils.sendCoordMessage(message, output);
                 logger.info("Successfully update replicas.");
             } catch (UnknownHostException e) {
-                logger.error(String.format("Unknown replica %s:%s", replicaInfo.getAddress(), replicaInfo.getPort()));
+                logger.error(String.format("Unknown replica %s:%s", replicaInfo.getNodeHost(), replicaInfo.getNodePort()));
             } catch (IOException e) {
-                logger.error(String.format("Failed to connect to %s:%s", replicaInfo.getAddress(), replicaInfo.getPort()));
+                logger.error(String.format("Failed to connect to %s:%s", replicaInfo.getNodeHost(), replicaInfo.getNodePort()));
             }
         }
     }

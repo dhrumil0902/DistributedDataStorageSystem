@@ -12,8 +12,8 @@ public class ECSNode implements IECSNode, Serializable {
     private int cacheSize;
     public String dBStoragePath;
     private String strategy;
-    private List<ECSNode> predecessors = new ArrayList<>(2);;
-    private List<ECSNode> successors = new ArrayList<>(2);;
+    public List<String> predecessors = new ArrayList<>(2);
+    public List<String> successors = new ArrayList<>(2);
 
     public ECSNode() {}
 
@@ -53,11 +53,11 @@ public class ECSNode implements IECSNode, Serializable {
         return nodeHashRange;
     }
 
-    public List<ECSNode> getPredecessors() {return predecessors;}
+    public List<String> getPredecessors() {return predecessors;}
 
-    public List<ECSNode> getSuccessors() {return successors;}
+    public List<String> getSuccessors() {return successors;}
 
-    public void setSuccessors(List<ECSNode> newSuccessors) {
+    public void setSuccessors(List<String> newSuccessors) {
         if (newSuccessors == null) {
             throw new IllegalArgumentException("Successor list cannot be null.");
         }

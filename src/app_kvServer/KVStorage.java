@@ -13,7 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class KVStorage {
-    private final File file;
+    public final File file;
     public final Path filePath;
 
     private static Logger logger = Logger.getRootLogger();
@@ -29,7 +29,7 @@ public class KVStorage {
             Files.createFile(filePath);
         } catch (IOException e) {
             if (!(e instanceof FileAlreadyExistsException)) {
-                throw new RuntimeException("Could not create storage file: " + filePath, e);
+                // throw new RuntimeException("Could not create storage file: " + filePath, e);
             }
         }
         this.file = filePath.toFile();

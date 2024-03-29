@@ -19,6 +19,8 @@ import java.io.FileInputStream;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.zip.*;
 import java.io.*;
 import java.util.zip.ZipEntry;
@@ -36,6 +38,8 @@ public class ClientConnection implements Runnable {
     private BufferedReader input;
     private BufferedWriter output;
     private boolean isOpen;
+    private final Lock lock = new ReentrantLock();
+
 
     public ClientConnection(Socket clientSocket, KVServer server) {
         this.clientSocket = clientSocket;
@@ -66,43 +70,47 @@ public class ClientConnection implements Runnable {
             }
         }
     }
-
     private void receiveMessage() {
-        String msg;
+        lock.lock();
         try {
-            msg = input.readLine();
-            if (msg == null) {
-                isOpen = false;
-                return;
-            }
+            String msg;
             try {
-                // Attempt to deserialize the message as KVMessage first
-                KVMessage message = KVMessageImpl.fromString(msg);
-                logger.info("Receive KVMessage.");
-                logger.info("Message: " + msg);
-                handleKVMessage(message);
-            } catch (IllegalArgumentException kvEx) {
-                logger.info("Not a KVMessage, trying ECSMessage.");
-                try {
-                    ECSMessage obj = new ObjectMapper().readValue(msg, ECSMessage.class);
-                    logger.info("Receive ECSMessage.");
-                    handleECSMessage(obj);
-                } catch (JsonMappingException ecsEx) {
-                    logger.info("Not an ECSMessage, trying CoordMessage.");
-                    try {
-                        CoordMessage coordMessage = new ObjectMapper().readValue(msg, CoordMessage.class);
-                        logger.info("Received CoordMessage.");
-                        handleCoordMessage(coordMessage);
-                    } catch (JsonProcessingException coordEx) {
-                        logger.error("Error during CoordMessage deserialization.", coordEx);
-                    }
-                } catch (IOException ecsEx) {
-                    logger.error("IO error during ECSMessage  deserialization.", ecsEx);
+                msg = input.readLine();
+                if (msg == null) {
+                    isOpen = false;
+                    return;
                 }
+                try {
+                    // Attempt to deserialize the message as KVMessage first
+                    KVMessage message = KVMessageImpl.fromString(msg);
+                    logger.info("Receive KVMessage.");
+                    logger.info("Message: " + msg);
+                    handleKVMessage(message);
+                } catch (IllegalArgumentException kvEx) {
+                    logger.info("Not a KVMessage, trying ECSMessage.");
+                    try {
+                        ECSMessage obj = new ObjectMapper().readValue(msg, ECSMessage.class);
+                        logger.info("Receive ECSMessage.");
+                        handleECSMessage(obj);
+                    } catch (JsonMappingException ecsEx) {
+                        logger.info("Not an ECSMessage, trying CoordMessage.");
+                        try {
+                            CoordMessage coordMessage = new ObjectMapper().readValue(msg, CoordMessage.class);
+                            logger.info("Received CoordMessage.");
+                            handleCoordMessage(coordMessage);
+                        } catch (JsonProcessingException coordEx) {
+                            logger.error("Error during CoordMessage deserialization.", coordEx);
+                        }
+                    } catch (IOException ecsEx) {
+                        logger.error("IO error during ECSMessage  deserialization.", ecsEx);
+                    }
+                }
+            } catch (IOException e) {
+                logger.info("Connection closed by the client.");
+                isOpen = false;
             }
-        } catch (IOException e) {
-            logger.info("Connection closed by the client.");
-            isOpen = false;
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -234,6 +242,13 @@ public class ClientConnection implements Runnable {
                 break;
             case UPDATE:
                 logger.info("Received command UPDATE from coordinator.");
+            case FORCE_SYNC:
+                if (kvServer.replicationsStored.containsKey(message.hashValueofSendingServer)){
+                    logger.info("Good");
+                }
+                else{
+                    kvServer.addReplicationFile(message.hashValueofSendingServer);
+                }
 
                 break;
         }

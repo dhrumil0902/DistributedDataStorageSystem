@@ -58,9 +58,9 @@ public class KVServer implements IKVServer, Runnable {
     private BST metadata;
     private boolean writeLock;
     private List<ClientConnection> clientConnections = new ArrayList<ClientConnection>();
-    private List<String> coordinators = new ArrayList<>(2);
-    private List<String> replicationsOfThisServer = new ArrayList<>(2);
-    private Map<String, KVStorage> replicationsStored = new HashMap<>(2); //hashvalue and storage
+    private List<String> coordinators = new ArrayList<>();
+    public List<String> replicationsOfThisServer = new ArrayList<>();
+    public Map<String, KVStorage> replicationsStored = new HashMap<>(); //hashvalue and storage
 
 
 
@@ -162,8 +162,9 @@ public class KVServer implements IKVServer, Runnable {
         // Check if the hash value already exists in the map
         if (replicationsStored.containsKey(hashValue)) {
             logger.warn("Data file for hash value " + hashValue + " already exists.");
-        } else {
-            String fileName = metadata.get(this.getHashValue()).getNodePort() + "_" + nodeName + ".txt";
+        } else
+        {
+            String fileName = this.getPort() + "_" + nodeName + ".txt";
             String path = this.storageDir + File.separator + fileName;
             KVStorage storage = new KVStorage(path);
             replicationsStored.put(hashValue, storage);
@@ -174,7 +175,6 @@ public class KVServer implements IKVServer, Runnable {
     public List<String> removeReplicationFileAndGetAllData(String hashValue) {
         // Check if the hash value exists in the map
         if (replicationsStored.containsKey(hashValue)) {
-            // Retrieve the KVStorage object associated with the hash value
             KVStorage storage = replicationsStored.get(hashValue);
             if (storage != null) {
                 // Get all data from the storage
@@ -185,7 +185,6 @@ public class KVServer implements IKVServer, Runnable {
                     logger.error("Unable to get all data from the storage.");
                     return new ArrayList<>();
                 }
-                // Remove the KVStorage object associated with the hash value
                 KVStorage removedStorage = replicationsStored.remove(hashValue);
                 if (removedStorage != null) {
                     logger.info("Removed replication data file for hash value " + hashValue);
@@ -664,14 +663,38 @@ public class KVServer implements IKVServer, Runnable {
             return;
         }
         this.metadata = metadata;
+        updateReplicaInfo();
     }
 
     private void updateReplicaInfo() {
     ECSNode node = (ECSNode) metadata.get(this.getHashValue());
+        List<String> previousReplicationsOfThisServer = replicationsOfThisServer;
         replicationsOfThisServer = node.successors;
         for (String hashofPredecessors: node.predecessors ) {
-            addReplicationFile(hashofPredecessors);
+            if (!replicationsStored.containsKey(hashofPredecessors)){
+                addReplicationFile(hashofPredecessors);
+            }
         }
+        synchronized(this) {
+            Set<String> keys = this.replicationsStored.keySet();
+            for (String hashofReplicationStorage : keys) {
+                if (!node.predecessors.contains(hashofReplicationStorage)) {
+                    //removeReplicationFileAndGetAllData(hashofReplicationStorage);
+                    replicationsStored.remove(hashofReplicationStorage);
+                }
+            }
+        }
+        if(!replicationsOfThisServer.equals(previousReplicationsOfThisServer)){
+            CoordMessage msg = new CoordMessage(this.getHashValue());
+            msg.setAction(CoordMessage.ActionType.FORCE_SYNC);
+            try {
+                msg.setData(storage.getAllData());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            updateReplica(msg);
+        }
+
     }
 
     public boolean getWriteLock() {

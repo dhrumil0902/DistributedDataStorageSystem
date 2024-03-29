@@ -279,8 +279,8 @@ public class AdditionalTest extends TestCase {
             KVServer server3 = new KVServer("localhost", 5100, "localhost", 47670,
                     0, "None", System.getProperty("user.dir"));
             Thread.sleep(2000);
-            /*BST metadata = server2.getMetadata();
-            ECSNode server0Node = (ECSNode) metadata.get(server0.getHashValue());
+            BST metadata = server2.getMetadata();
+            /*ECSNode server0Node = (ECSNode) metadata.get(server0.getHashValue());
             ECSNode server1Node = (ECSNode) metadata.get(server1.getHashValue());
             List<ECSNode> successors = Arrays.asList(server1Node);
             // server0Node.setSuccessors(successors);

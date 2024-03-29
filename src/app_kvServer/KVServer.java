@@ -566,12 +566,55 @@ public class KVServer implements IKVServer, Runnable {
                     return response;
                 }
             }
-        } else {
+        }
+        else if (checkKeyRangeForReplicas(key)){
+            response.setKey(key);
+            synchronized (lock) {
+                try {
+                    logger.info("SERVER: Trying to GET the value from replicas associated with Key '" + key);
+                    String nodeHash = metadata.getNodeFromKey(key).getNodeHashRange()[1];
+                    String value = null;
+                    if (nodeHash != null){
+                        value = replicationsStored.get(nodeHash).getKV(key);
+                    }
+
+                    if (value == null || value.isEmpty()) {
+                        response.setStatus(StatusType.GET_ERROR);
+                        return response;
+                    }
+                    response.setStatus(StatusType.GET_SUCCESS);
+                    response.setValue(value);
+                } catch (Exception e) {
+                    logger.error("Error retrieving value for key '" + key + "': " + e.getMessage());
+                    response.setStatus(StatusType.GET_ERROR);
+                    return response;
+                }
+            }
+        }
+        else {
             response.setStatus(StatusType.SERVER_NOT_RESPONSIBLE);
             response.setMetadata(this.metadata);
         }
         return response;
 
+    }
+
+    private boolean checkKeyRangeForReplicas(String key) {
+        String nodeHash = metadata.getNodeFromKey(key).getNodeHashRange()[1];
+        if (nodeHash != null){
+            return replicationsStored.containsKey(nodeHash);
+        }
+        return false;
+    }
+
+    private String getKVFromReplicas(String key) {
+        for (KVStorage replicaStorage : replicationsStored.values()){
+            String value = replicaStorage.getKV(key);
+            if ( value != null && !value.isEmpty()){
+                return value;
+            }
+        }
+        return null;
     }
 
     public KVMessage handlePutMessage(KVMessage message) {
@@ -657,9 +700,8 @@ public class KVServer implements IKVServer, Runnable {
         if (this.metadata == null) {
             logger.info("Register to ECS success.");
             this.metadata = metadata;
-            updateReplicaInfo();
-            // updateSuccessorAndPredecessorsInfo();
             this.register = true;
+            updateReplicaInfo();
             return;
         }
         this.metadata = metadata;
@@ -680,11 +722,14 @@ public class KVServer implements IKVServer, Runnable {
             for (String hashofReplicationStorage : keys) {
                 if (!node.predecessors.contains(hashofReplicationStorage)) {
                     //removeReplicationFileAndGetAllData(hashofReplicationStorage);
+                    replicationsStored.get(hashofReplicationStorage).removeAllData();
                     replicationsStored.remove(hashofReplicationStorage);
+
                 }
             }
         }
-        if(!replicationsOfThisServer.equals(previousReplicationsOfThisServer)){
+        // add if condition, if time permits to fix bug
+        //if(!replicationsOfThisServer.equals(previousReplicationsOfThisServer)){
             CoordMessage msg = new CoordMessage(this.getHashValue());
             msg.setAction(CoordMessage.ActionType.FORCE_SYNC);
             try {
@@ -693,8 +738,7 @@ public class KVServer implements IKVServer, Runnable {
                 throw new RuntimeException(e);
             }
             updateReplica(msg);
-        }
-
+        //}
     }
 
     public boolean getWriteLock() {

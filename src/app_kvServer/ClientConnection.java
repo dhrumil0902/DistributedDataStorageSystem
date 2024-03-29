@@ -160,6 +160,10 @@ public class ClientConnection implements Runnable {
                 logger.info("Append data successful: " + kvServer.getPort());
                 kvServer.appendDataToStorage(msg.getData());
                 response.setSuccess(true);
+                CoordMessage syncMessage = new CoordMessage(kvServer.getHashValue());
+                syncMessage.setData(kvServer.getAllData());
+                syncMessage.setAction(CoordMessage.ActionType.FORCE_SYNC);
+                kvServer.updateReplica(syncMessage);
                 break;
             case TRANSFER:
                 logger.info("Received command TRANSFER: " + kvServer.getPort());
@@ -197,6 +201,10 @@ public class ClientConnection implements Runnable {
                 }
                 if (kvServer.removeData(range[0], range[1])) {
                     logger.info("Successfully able to REMOVE data in: " + kvServer.getPort());
+                    CoordMessage syncMsg = new CoordMessage(kvServer.getHashValue());
+                    syncMsg.setData(kvServer.getAllData());
+                    syncMsg.setAction(CoordMessage.ActionType.FORCE_SYNC);
+                    kvServer.updateReplica(syncMsg);
                     response.setSuccess(true);
                 } else {
                     response.setSuccess(false);
@@ -244,10 +252,15 @@ public class ClientConnection implements Runnable {
                 logger.info("Received command UPDATE from coordinator.");
             case FORCE_SYNC:
                 if (kvServer.replicationsStored.containsKey(message.hashValueofSendingServer)){
-                    logger.info("Good");
+                    KVStorage replicaStorage = kvServer.replicationsStored.get(message.hashValueofSendingServer);
+                    replicaStorage.removeAllData();
+                    replicaStorage.putList(message.getData());
                 }
                 else{
                     kvServer.addReplicationFile(message.hashValueofSendingServer);
+                    KVStorage replicaStorage = kvServer.replicationsStored.get(message.hashValueofSendingServer);
+                    replicaStorage.removeAllData();
+                    replicaStorage.putList(message.getData());
                 }
 
                 break;
@@ -274,6 +287,10 @@ public class ClientConnection implements Runnable {
                     break;
                 }
                 response = kvServer.handlePutMessage(msg);
+                CoordMessage syncMessage = new CoordMessage(kvServer.getHashValue());
+                syncMessage.setData(kvServer.getAllData());
+                syncMessage.setAction(CoordMessage.ActionType.FORCE_SYNC);
+                kvServer.updateReplica(syncMessage);
                 break;
             case KEYRANGE:
                 if (!kvServer.checkRegisterStatus()) {

@@ -385,6 +385,13 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
                         logger.info("Added new node to the bst, current state of bst: " + nodes.print());
                         updateAllNodesMetaData();
                     }
+                    ECSMessage sucNodeMsg = new ECSMessage();
+                    sucNodeMsg.setAction(ActionType.UNSET_WRITE_LOCK);
+                    try {
+                        sendMessage(successorNode, sucNodeMsg);
+                    } catch (Exception e) {
+                        logger.error("Couldn't UNSET write lock.");
+                    }
                 }
                 logger.info("Added new node to the bst, current state of bst: " + nodes.print());
                 updateAllNodesMetaData();

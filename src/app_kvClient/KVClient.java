@@ -79,6 +79,8 @@ public class KVClient implements IKVClient {
                 case PUT_ERROR:
                     printError("Error putting <" + key + ", " + value + ">");
                     break;
+                case SERVER_WRITE_LOCK:
+                    printError(String.format("Failed to put <%s, %s>: Server write lock is set.", key, value));
                 default:
                     printError("Unknown status: " + response.getStatus());
             }

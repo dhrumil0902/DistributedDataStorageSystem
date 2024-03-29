@@ -5,11 +5,9 @@ import shared.utils.HashUtils;
 
 import java.io.*;
 import java.math.BigInteger;
-import java.nio.file.FileAlreadyExistsException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.nio.file.*;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class KVStorage {
@@ -171,6 +169,13 @@ public class KVStorage {
         return result;
     }
 
+    public synchronized void removeAllData() {
+        try {
+            Files.write(filePath, Collections.emptyList(), StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
     public synchronized void removeData(String minVal, String maxVal) throws IOException {
         BigInteger bottom = new BigInteger(minVal, 16);
         BigInteger top = new BigInteger(maxVal, 16);

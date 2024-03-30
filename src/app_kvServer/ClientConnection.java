@@ -275,6 +275,7 @@ public class ClientConnection implements Runnable {
                 else{
                         if (message.nodes != null) {
                             kvServer.metadata = message.nodes;
+                            kvServer.register = true;
                         }
                         kvServer.addReplicationFile(message.hashValueofSendingServer);
                         KVStorage replicaStorage = kvServer.replicationsStored.get(message.hashValueofSendingServer);

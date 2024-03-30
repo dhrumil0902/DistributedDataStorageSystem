@@ -96,7 +96,7 @@ public class BST implements Serializable {
 
         Map.Entry<String, ECSNode> entry = bst.higherEntry(key);
         if (entry == null) {
-            return bst.lastEntry().getValue();
+            return bst.firstEntry().getValue();
         }
         return entry.getValue();
     }

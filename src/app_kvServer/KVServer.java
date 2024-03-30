@@ -48,7 +48,7 @@ public class KVServer implements IKVServer, Runnable {
     CacheStrategy strategy;
     private ServerSocket serverSocket;
     private boolean running;
-    private boolean register;
+    public boolean register;
     public String storagePath;
     private IKVCache cache;
     private KVStorage storage;
@@ -447,7 +447,7 @@ public class KVServer implements IKVServer, Runnable {
         running = false;
         syncCacheToStorage();
         try {
-            // disconnectFromCentralServer();
+            disconnectFromCentralServer();
             serverSocket.close();
             for (ClientConnection connection : clientConnections) {
                 connection.close();
@@ -572,7 +572,7 @@ public class KVServer implements IKVServer, Runnable {
             synchronized (lock) {
                 try {
                     logger.info("SERVER: Trying to GET the value from replicas associated with Key '" + key);
-                    String nodeHash = metadata.getNodeFromKey(key).getNodeHashRange()[1];
+                    String nodeHash = metadata.getNodeFromKey(HashUtils.getHash(key)).getNodeHashRange()[1];
                     String value = null;
                     if (nodeHash != null){
                         value = replicationsStored.get(nodeHash).getKV(key);
@@ -600,7 +600,7 @@ public class KVServer implements IKVServer, Runnable {
     }
 
     private boolean checkKeyRangeForReplicas(String key) {
-        String nodeHash = metadata.getNodeFromKey(key).getNodeHashRange()[1];
+        String nodeHash = metadata.getNodeFromKey(HashUtils.getHash(key)).getNodeHashRange()[1];
         if (nodeHash != null){
             return replicationsStored.containsKey(nodeHash);
         }

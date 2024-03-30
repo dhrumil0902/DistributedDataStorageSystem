@@ -179,11 +179,10 @@ public class KVStorage {
     public synchronized void removeData(String minVal, String maxVal) throws IOException {
         BigInteger bottom = new BigInteger(minVal, 16);
         BigInteger top = new BigInteger(maxVal, 16);
-        File tempFile = new File(file.getAbsolutePath() + ".tmp");
         List<String> toRemove = new ArrayList<>();
+        List<String> toKeep = new ArrayList<>();
 
-        try (BufferedReader reader = new BufferedReader(new FileReader(file));
-             BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile))) {
+        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 String[] parts = line.split(" ", 2);
@@ -198,25 +197,19 @@ public class KVStorage {
                         (hashValue.compareTo(top) <= 0 || hashValue.compareTo(bottom) >= 0);
 
                 if (!shouldRemove) {
-                    writer.write(line);
-                    writer.newLine();
+                    toKeep.add(line);
                 } else {
                     toRemove.add(line);
                 }
             }
         }
 
-        // Replace the original file with the temp file
-        if (!toRemove.isEmpty()) { // Check if there's anything to remove
-            if (!file.delete()) {
-                throw new IOException("Could not delete the original file.");
-            }
-            if (!tempFile.renameTo(file)) {
-                throw new IOException("Could not rename the temp file to the original file name.");
-            }
-        } else { // If nothing to remove, just delete the temp file
-            if (!tempFile.delete()) {
-                throw new IOException("Could not delete the temp file.");
+        if (!toRemove.isEmpty()) {
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(file, false))) { // false to overwrite
+                for (String keepLine : toKeep) {
+                    writer.write(keepLine);
+                    writer.newLine();
+                }
             }
         }
     }

@@ -55,7 +55,7 @@ public class KVServer implements IKVServer, Runnable {
     private final Object lock = new Object();
     private String serverName;
     private String hashValue;
-    private BST metadata;
+    public BST metadata;
     private boolean writeLock;
     private List<ClientConnection> clientConnections = new ArrayList<ClientConnection>();
     private List<String> coordinators = new ArrayList<>();
@@ -708,7 +708,7 @@ public class KVServer implements IKVServer, Runnable {
         updateReplicaInfo();
     }
 
-    private void updateReplicaInfo() {
+    private synchronized void updateReplicaInfo() {
     ECSNode node = (ECSNode) metadata.get(this.getHashValue());
         List<String> previousReplicationsOfThisServer = replicationsOfThisServer;
         replicationsOfThisServer = node.successors;
@@ -719,12 +719,14 @@ public class KVServer implements IKVServer, Runnable {
         }
         synchronized(this) {
             Set<String> keys = this.replicationsStored.keySet();
-            for (String hashofReplicationStorage : keys) {
+            Iterator<String> iterator = keys.iterator();
+            while (iterator.hasNext()) {
+                String hashofReplicationStorage = iterator.next();
                 if (!node.predecessors.contains(hashofReplicationStorage)) {
                     //removeReplicationFileAndGetAllData(hashofReplicationStorage);
                     replicationsStored.get(hashofReplicationStorage).removeAllData();
+                    iterator.remove();
                     replicationsStored.remove(hashofReplicationStorage);
-
                 }
             }
         }
@@ -732,6 +734,7 @@ public class KVServer implements IKVServer, Runnable {
         //if(!replicationsOfThisServer.equals(previousReplicationsOfThisServer)){
             CoordMessage msg = new CoordMessage(this.getHashValue());
             msg.setAction(CoordMessage.ActionType.FORCE_SYNC);
+            msg.nodes = this.metadata;
             try {
                 msg.setData(storage.getAllData());
             } catch (IOException e) {

@@ -1,5 +1,7 @@
 package shared.messages;
 
+import shared.BST;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
@@ -20,6 +22,7 @@ public class CoordMessage implements Serializable {
     public boolean isSuccess;
 
     public String hashValueofSendingServer;
+    public BST nodes = null;
 
     public CoordMessage(String hashValueofSendingServer) {
         this.action = null;

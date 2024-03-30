@@ -70,7 +70,7 @@ public class ClientConnection implements Runnable {
             }
         }
     }
-    private void receiveMessage() {
+    private synchronized void receiveMessage() {
         lock.lock();
         try {
             String msg;
@@ -257,10 +257,18 @@ public class ClientConnection implements Runnable {
                     replicaStorage.putList(message.getData());
                 }
                 else{
-                    kvServer.addReplicationFile(message.hashValueofSendingServer);
-                    KVStorage replicaStorage = kvServer.replicationsStored.get(message.hashValueofSendingServer);
-                    replicaStorage.removeAllData();
-                    replicaStorage.putList(message.getData());
+                    try {
+                        if (message.nodes != null) {
+                            kvServer.metadata = message.nodes;
+                        }
+                        kvServer.addReplicationFile(message.hashValueofSendingServer);
+                        KVStorage replicaStorage = kvServer.replicationsStored.get(message.hashValueofSendingServer);
+                        replicaStorage.removeAllData();
+                        replicaStorage.putList(message.getData());
+                    }
+                    catch (Exception e){
+                        logger.error("EXCEPTION ERRORS: " + e.getMessage());
+                    }
                 }
 
                 break;

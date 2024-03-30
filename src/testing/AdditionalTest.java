@@ -8,7 +8,9 @@ import org.junit.Test;
 import app_kvECS.ECSClient;
 import junit.framework.TestCase;
 import shared.BST;
+import shared.messages.KVMessageImpl;
 import shared.messages.CoordMessage;
+import shared.messages.KVMessage;
 import shared.utils.HashUtils;
 
 import java.io.IOException;
@@ -268,6 +270,17 @@ public class AdditionalTest extends TestCase {
             ECSClient ecs = new ECSClient("localhost", 5100);
             KVServer server0 = new KVServer("localhost", 5100, "localhost", 46683,
                     0, "None", System.getProperty("user.dir"));
+            server0.putKV("this", "that");
+            server0.putKV("bfgbfgbfgbf", "that");
+            server0.putKV("thfgbfgbfgbfgbis", "that");
+            server0.putKV("fgbfgbfgb", "that");
+            server0.putKV("fgbfgbfgbfgbf", "that");
+            server0.putKV("fgbfgbgfbfgb", "that");
+            server0.putKV("fgbfgbfgbfgb", "that");
+            server0.putKV("fgbfgbfgbfgb", "that");
+            server0.putKV("fgbfgbfgbfgbfgb", "that");
+            server0.putKV("gfbfgbfgbfgbfgbfbgfbfgb", "that");
+
             Thread.sleep(2000);
             // server0.putKV("key", "val");
             KVServer server1 = new KVServer("localhost", 5100, "localhost", 42609,
@@ -276,6 +289,12 @@ public class AdditionalTest extends TestCase {
             KVServer server2 = new KVServer("localhost", 5100, "localhost", 42610,
                     0, "None", System.getProperty("user.dir"));
             Thread.sleep(2000);
+            KVMessage msgkv = new KVMessageImpl();
+            msgkv.setStatus(KVMessage.StatusType.GET);
+            msgkv.setKey("this");
+            KVMessage check = server2.handleGetMessage(msgkv);
+            KVMessage check1 = server1.handleGetMessage(msgkv);
+            KVMessage check2 = server0.handleGetMessage(msgkv);
             KVServer server3 = new KVServer("localhost", 5100, "localhost", 47670,
                     0, "None", System.getProperty("user.dir"));
             Thread.sleep(2000);

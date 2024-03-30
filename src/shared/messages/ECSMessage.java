@@ -15,7 +15,9 @@ public class ECSMessage implements Serializable {
         APPEND, // appends the given KV pairs stored in "data" field, return successs = true
         REMOVE, // remove all keys in the range field, and return those KV pairs, stored in data. success = true
         UPDATE_METADATA, // "nodes" field is filled with metadata, simply update kvserver's "nodes" field and return success = true
-        HEARTBEAT
+        HEARTBEAT,
+        INTERNAL_TRANSFER
+
     }
 
     private ActionType action;
@@ -24,6 +26,7 @@ public class ECSMessage implements Serializable {
     public List<String> data;
     public String[] range;
     public BST nodes;
+    public String internalTransferHash;
     private String errorMessage = null;
 
     public ECSMessage() {
@@ -42,7 +45,14 @@ public class ECSMessage implements Serializable {
         this.range = range;
         this.nodes = nodes;
     }
-
+    public ECSMessage(ActionType action, boolean success, List<String> data, String[] range, BST nodes, String internalTransferHash) {
+        this.setAction(action);
+        this.success = success;
+        this.data = data;
+        this.range = range;
+        this.nodes = nodes;
+        this.internalTransferHash = internalTransferHash;
+    }
     public ActionType getAction() {
         return action;
     }

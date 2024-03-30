@@ -447,7 +447,7 @@ public class KVServer implements IKVServer, Runnable {
         running = false;
         syncCacheToStorage();
         try {
-            disconnectFromCentralServer();
+            // disconnectFromCentralServer();
             serverSocket.close();
             for (ClientConnection connection : clientConnections) {
                 connection.close();

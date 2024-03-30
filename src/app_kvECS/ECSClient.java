@@ -338,6 +338,28 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
         }
     }
 
+    public boolean removeNodeForForceShutdown(ECSNode removeNode) throws Exception {
+        synchronized (lock) {
+            String removeNodeHash = removeNode.getNodeHashRange()[1];
+
+            if (nodes.size() == 1) {
+                nodes.delete(removeNodeHash);
+                return true;
+            }
+
+            String hashOfSuccessor = getSuccessor(removeNodeHash);
+            ECSNode successorNode = (ECSNode) nodes.get(hashOfSuccessor);
+            sendMessage(successorNode, new ECSMessage(ActionType.SET_WRITE_LOCK, true, null, null, nodes));
+            sendMessage(successorNode, new ECSMessage(ActionType.INTERNAL_TRANSFER, true, null, null, nodes, removeNodeHash));
+            sendMessage(successorNode, new ECSMessage(ActionType.UNSET_WRITE_LOCK, true, null, null, nodes));
+            successorNode.getNodeHashRange()[0] = removeNode.getNodeHashRange()[0];
+            nodes.delete(removeNodeHash);
+            updateAllNodesMetaData();
+            logger.info("Removed a node from the bst, current state of bst: " + nodes.print());
+            return true;
+        }
+    }
+
     private void transferDataForRemovedNode(ECSNode removeNode, ECSNode successorNode) {
         try {
             ECSMessage msg = sendMessage(removeNode, new ECSMessage(ActionType.TRANSFER, true, null, null, nodes));
@@ -716,26 +738,32 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
 
     public void onServerDown(ECSNode node) {
         logger.info("Server" + node.getNodeName() + "is down.");
+        try {
+            removeNodeForForceShutdown(node);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
 
-    public void sendHeartbeats() {
-        synchronized (this) {
+    public synchronized void sendHeartbeats() {
             logger.info("Sending HeartBeats");
-            /*for (IECSNode node : this.getNodes().values()) {
+            if(nodes.isEmpty()){
+                return;
+            }
+            for (IECSNode node : nodes.values()) {
                 try {
                     ECSMessage heartbeatMsg = new ECSMessage(ActionType.HEARTBEAT, true, null, null, null);
                     ECSMessage response = this.sendMessage((ECSNode) node, heartbeatMsg);
                     if (response == null || !response.success) {
                         logger.info("Failed to receive heartbeat response from: " + node.getNodeName());
+                        onServerDown((ECSNode) node);
                     } else {
                         logger.info("Received heartbeat response from: " + node.getNodeName());
                     }
                 } catch (Exception e) {
                     logger.error("Error sending heartbeat to " + node.getNodeName());
-                    e.printStackTrace();
                 }
-            }*/
             }
         }
     }

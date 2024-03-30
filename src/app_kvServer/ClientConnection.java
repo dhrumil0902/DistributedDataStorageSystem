@@ -19,6 +19,7 @@ import java.io.FileInputStream;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.zip.*;
@@ -189,6 +190,21 @@ public class ClientConnection implements Runnable {
                     logger.info("Failed to transfer data.");
                 }
                 break;
+            case INTERNAL_TRANSFER:
+                logger.info("Internal Transferring of Data for the node");
+                List<String> dataToTransfer = kvServer.replicationsStored.get(msg.internalTransferHash).getAllData();
+                if (dataToTransfer == null || dataToTransfer.isEmpty()){
+                    response.setSuccess(true);
+                    logger.info("Nothing to update for internal transfer.");
+                    break;
+                }
+                kvServer.appendDataToStorage(dataToTransfer);
+                response.setSuccess(true);
+                CoordMessage syncedMsg = new CoordMessage(kvServer.getHashValue());
+                syncedMsg.setData(kvServer.getAllData());
+                syncedMsg.setAction(CoordMessage.ActionType.FORCE_SYNC);
+                kvServer.updateReplica(syncedMsg);
+                break;
             case REMOVE:
                 logger.info("Received command REMOVE: " + kvServer.getPort());
                 logger.info("Range: " + range[0] + " : " + range[1]);
@@ -257,7 +273,6 @@ public class ClientConnection implements Runnable {
                     replicaStorage.putList(message.getData());
                 }
                 else{
-                    try {
                         if (message.nodes != null) {
                             kvServer.metadata = message.nodes;
                         }
@@ -265,10 +280,6 @@ public class ClientConnection implements Runnable {
                         KVStorage replicaStorage = kvServer.replicationsStored.get(message.hashValueofSendingServer);
                         replicaStorage.removeAllData();
                         replicaStorage.putList(message.getData());
-                    }
-                    catch (Exception e){
-                        logger.error("EXCEPTION ERRORS: " + e.getMessage());
-                    }
                 }
 
                 break;

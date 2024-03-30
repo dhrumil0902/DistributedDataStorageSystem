@@ -7,10 +7,11 @@ import org.apache.log4j.Level;
 import org.junit.Test;
 import app_kvECS.ECSClient;
 import junit.framework.TestCase;
+import org.junit.experimental.theories.Theories;
 import shared.BST;
-import shared.messages.KVMessageImpl;
 import shared.messages.CoordMessage;
 import shared.messages.KVMessage;
+import shared.messages.KVMessageImpl;
 import shared.utils.HashUtils;
 
 import java.io.IOException;
@@ -180,8 +181,8 @@ public class AdditionalTest extends TestCase {
             assertEquals(0, client.nodes.size());
         }
         catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
+            throw new RuntimeException(e);
+        }
     }
     @Test
     public void testPersistentStorage() {
@@ -264,55 +265,120 @@ public class AdditionalTest extends TestCase {
     }
 
     @Test
-    public void testUpdateReplica() {
+    public void testAddCoordAndReplica() {
         try {
             new LogSetup("test3.log", Level.ALL);
             ECSClient ecs = new ECSClient("localhost", 5100);
-            KVServer server0 = new KVServer("localhost", 5100, "localhost", 46683,
+            KVServer server0 = new KVServer("localhost", 5100, "localhost", 42609,
                     0, "None", System.getProperty("user.dir"));
-            server0.putKV("this", "that");
-            server0.putKV("bfgbfgbfgbf", "that");
-            server0.putKV("thfgbfgbfgbfgbis", "that");
-            server0.putKV("fgbfgbfgb", "that");
-            server0.putKV("fgbfgbfgbfgbf", "that");
-            server0.putKV("fgbfgbgfbfgb", "that");
-            server0.putKV("fgbfgbfgbfgb", "that");
-            server0.putKV("fgbfgbfgbfgb", "that");
-            server0.putKV("fgbfgbfgbfgbfgb", "that");
-            server0.putKV("gfbfgbfgbfgbfgbfbgfbfgb", "that");
+            Thread.sleep(1000);
+            server0.putKV("key", "val0");
+            server0.putKV("abc", "val1");
+            Thread.sleep(1000);
+            KVServer server1 = new KVServer("localhost", 5100, "localhost", 42157,
+                    0, "None", System.getProperty("user.dir"));
+            Thread.sleep(3000);
+            // "key" belongs to server1, "abc" belongs to server0
+            // both kv are accessible from two servers
+            // query "key"
+            KVMessage query1 = new KVMessageImpl();
+            KVMessage query2 = new KVMessageImpl();
+            query1.setKey("key");
+            query2.setKey("abc");
+            query1.setStatus(KVMessage.StatusType.GET);
+            query2.setStatus(KVMessage.StatusType.GET);
+            KVMessage response = server0.handleGetMessage(query1);
+            assertEquals(response.getValue(), "val0");
+            response = server1.handleGetMessage(query1);
+            assertEquals(response.getValue(), "val0");
+            // query "abc"
+            response = server0.handleGetMessage(query2);
+            assertEquals(response.getValue(), "val1");
+            response = server1.handleGetMessage(query2);
+            assertEquals(response.getValue(), "val1");
+            Thread.sleep(1000);
 
-            Thread.sleep(2000);
-            // server0.putKV("key", "val");
-            KVServer server1 = new KVServer("localhost", 5100, "localhost", 42609,
+            KVServer server2 = new KVServer("localhost", 5100, "localhost", 46683,
                     0, "None", System.getProperty("user.dir"));
-            Thread.sleep(2000);
-            KVServer server2 = new KVServer("localhost", 5100, "localhost", 42610,
+            Thread.sleep(3000);
+            // "abc" belongs to server2
+            response = server2.handleGetMessage(query1);
+            assertEquals(response.getValue(), "val0");
+            response = server2.handleGetMessage(query2);
+            assertEquals(response.getValue(), "val1");
+//            Thread.sleep(5000);
+
+            server2.close();
+            Thread.sleep(3000);
+            response = server0.handleGetMessage(query2);
+            assertEquals(response.getValue(), "val1");
+            response = server1.handleGetMessage(query2);
+            assertEquals(response.getValue(), "val1");
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Test
+    public void testClientMsgSync() {
+        try {
+            new LogSetup("test3.log", Level.ALL);
+            ECSClient ecs = new ECSClient("localhost", 5100);
+            KVServer server0 = new KVServer("localhost", 5100, "localhost", 42609,
                     0, "None", System.getProperty("user.dir"));
-            Thread.sleep(2000);
-            KVMessage msgkv = new KVMessageImpl();
-            msgkv.setStatus(KVMessage.StatusType.GET);
-            msgkv.setKey("this");
-            KVMessage check = server2.handleGetMessage(msgkv);
-            KVMessage check1 = server1.handleGetMessage(msgkv);
-            KVMessage check2 = server0.handleGetMessage(msgkv);
-            KVServer server3 = new KVServer("localhost", 5100, "localhost", 47670,
+//            Thread.sleep(1000);
+            KVServer server1 = new KVServer("localhost", 5100, "localhost", 42157,
                     0, "None", System.getProperty("user.dir"));
-            Thread.sleep(2000);
-            BST metadata = server2.getMetadata();
-            /*ECSNode server0Node = (ECSNode) metadata.get(server0.getHashValue());
-            ECSNode server1Node = (ECSNode) metadata.get(server1.getHashValue());
-            List<ECSNode> successors = Arrays.asList(server1Node);
-            // server0Node.setSuccessors(successors);
-            // server0.setReplicationsOfThisServer(server0Node);
-            CoordMessage message = new CoordMessage(server0.getHashValue());
-            message.setAction(CoordMessage.ActionType.PUT);
-            message.setKey("key");
-            message.setValue("val");
-            server0.updateReplica(message);
-            Thread.sleep(2000);
-            System.out.println(server0.getMetadata().print());
-            System.out.println(server0.getKV("key"));
-            System.out.println(server1.getKV("key"));*/
+//            Thread.sleep(1000);
+            KVServer server2 = new KVServer("localhost", 5100, "localhost", 46683,
+                    0, "None", System.getProperty("user.dir"));
+            Thread.sleep(3000);
+            KVMessage query = new KVMessageImpl();
+            // PUT
+            query.setStatus(KVMessage.StatusType.PUT);
+            query.setKey("key");
+            query.setValue("val0");
+            KVMessage response = server1.handlePutMessage(query);
+            System.out.println(response.getStatus().toString());
+            Thread.sleep(3000);
+            query.setStatus(KVMessage.StatusType.GET);
+            response = server0.handleGetMessage(query);
+            assertEquals(response.getValue(), "val0");
+            response = server1.handleGetMessage(query);
+            assertEquals(response.getValue(), "val0");
+            response = server2.handleGetMessage(query);
+            assertEquals(response.getValue(), "val0");
+            Thread.sleep(1000);
+
+            // UPDATE
+            query.setValue("val1");
+            response = server1.handlePutMessage(query);
+            System.out.println(response.getStatus().toString());
+            Thread.sleep(3000);
+            query.setStatus(KVMessage.StatusType.GET);
+            response = server0.handleGetMessage(query);
+            assertEquals(response.getValue(), "val1");
+            response = server1.handleGetMessage(query);
+            assertEquals(response.getValue(), "val1");
+            response = server2.handleGetMessage(query);
+            assertEquals(response.getValue(), "val1");
+
+            // DELETE
+            query.setValue("null");
+            response = server1.handlePutMessage(query);
+            System.out.println(response.getStatus().toString());
+            Thread.sleep(3000);
+            query.setStatus(KVMessage.StatusType.GET);
+            response = server0.handleGetMessage(query);
+            assertNull(response.getValue());
+            response = server1.handleGetMessage(query);
+            assertNull(response.getValue());
+            response = server2.handleGetMessage(query);
+            assertNull(response.getValue());
         } catch (IOException e) {
             throw new RuntimeException(e);
         } catch (InterruptedException e) {

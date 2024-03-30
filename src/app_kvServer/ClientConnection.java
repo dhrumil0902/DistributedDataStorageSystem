@@ -267,6 +267,7 @@ public class ClientConnection implements Runnable {
             case UPDATE:
                 logger.info("Received command UPDATE from coordinator.");
             case FORCE_SYNC:
+                logger.info("Received FORCE_SYNC from : " +  message.hashValueofSendingServer + "  with following data: " + message.getData());
                 if (kvServer.replicationsStored.containsKey(message.hashValueofSendingServer)){
                     KVStorage replicaStorage = kvServer.replicationsStored.get(message.hashValueofSendingServer);
                     replicaStorage.removeAllData();

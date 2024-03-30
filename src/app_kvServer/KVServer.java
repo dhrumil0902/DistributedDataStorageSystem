@@ -689,7 +689,7 @@ public class KVServer implements IKVServer, Runnable {
         KVMessage message = new KVMessageImpl();
         message.setMetadata(metadata);
         if (message.getMetadata() == null) {
-            message.setStatus(KVMessage.StatusType.KEYRANGE_ERROR);
+            message.setStatus(KVMessage.StatusType.SERVER_STOPPED);
         } else {
             message.setStatus(KVMessage.StatusType.KEYRANGE_SUCCESS);
         }

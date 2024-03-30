@@ -79,6 +79,34 @@ public class KVMessageImpl implements KVMessage, Serializable {
         return sb.toString();
     }
 
+    public String getKeyrangeReadString() {
+        if (metadata == null) {
+            throw new IllegalArgumentException("Cannot build keyrange string: metadata does not exist");
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("KEYRANGE_READ_SUCCESS ");
+        for (String key : metadata.keys()) {
+            ECSNode node = metadata.bst.get(key);
+            sb.append(node.getNodeHashRange()[0])
+                    .append(",")
+                    .append(node.getNodeHashRange()[1])
+                    .append(",")
+                    .append(node.getNodeName())
+                    .append(";");
+            for (String sucKey : node.getPredecessors()) {
+                ECSNode sucNode = metadata.bst.get(key);
+                sb.append(node.getNodeHashRange()[0])
+                        .append(",")
+                        .append(node.getNodeHashRange()[1])
+                        .append(",")
+                        .append(sucNode.getNodeName())
+                        .append(";");
+            }
+        }
+        sb.deleteCharAt(sb.length() - 1);
+        return sb.toString();
+    }
+
     public KVMessageImpl(BST metadata, StatusType status) {
         this.metadata = metadata;
         this.status = status;
@@ -193,7 +221,8 @@ public class KVMessageImpl implements KVMessage, Serializable {
                 return "KEYRANGE_ERROR";
             case KEYRANGE_SUCCESS:
                 return getKeyrangeString();
-            
+            case KEYRANGE_READ_SUCCESS:
+                return getKeyrangeReadString();
             default:
                 return "FAILED Unexpected status type when serializing";
         }

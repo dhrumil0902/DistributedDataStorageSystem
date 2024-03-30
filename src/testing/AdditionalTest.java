@@ -387,4 +387,26 @@ public class AdditionalTest extends TestCase {
             throw new RuntimeException(e);
         }
     }
+
+    @Test
+    public void testKeyrangeMsg() {
+        try {
+            new LogSetup("test3.log", Level.ALL);
+            ECSClient ecs = new ECSClient("localhost", 5100);
+            KVServer server0 = new KVServer("localhost", 5100, "localhost", 42609,
+                    0, "None", System.getProperty("user.dir"));
+            KVServer server1 = new KVServer("localhost", 5100, "localhost", 42157,
+                    0, "None", System.getProperty("user.dir"));
+            KVServer server2 = new KVServer("localhost", 5100, "localhost", 46683,
+                    0, "None", System.getProperty("user.dir"));
+            Thread.sleep(3000);
+
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 }

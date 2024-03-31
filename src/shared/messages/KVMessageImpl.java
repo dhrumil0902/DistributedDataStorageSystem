@@ -39,7 +39,7 @@ public class KVMessageImpl implements KVMessage, Serializable {
 
     /*
      * Factory for metadata given string format:
-     * KEYRANGE_SUCCESS <range_from>,<range_to>,<ip:port>;...
+     * <status> <range_from>,<range_to>,<ip:port>;...
      */
     public static KVMessageImpl fromKeyRange(String message, StatusType status) throws IllegalArgumentException {
         IllegalArgumentException e = new IllegalArgumentException("keyrange message should follow the format: KEYRANGE_SUCCESS <range_from>,<range_to>,<ip:port>;");
@@ -172,11 +172,13 @@ public class KVMessageImpl implements KVMessage, Serializable {
                     return new KVMessageImpl(status);
                 case KEYRANGE:
                     return new KVMessageImpl(status);
-                case KEYRANGE_READ:
-                    return new KVMessageImpl(status);
                 case KEYRANGE_ERROR:
                     return new KVMessageImpl(status);
                 case KEYRANGE_SUCCESS:
+                    return KVMessageImpl.fromKeyRange(message, status);
+                case KEYRANGE_READ:
+                    return new KVMessageImpl(status);
+                case KEYRANGE_READ_SUCCESS:
                     return KVMessageImpl.fromKeyRange(message, status);
                 case DISCONNECT:
                     return new KVMessageImpl(status);
@@ -223,6 +225,8 @@ public class KVMessageImpl implements KVMessage, Serializable {
                 return getKeyrangeString();
             case KEYRANGE_READ_SUCCESS:
                 return getKeyrangeReadString();
+            case KEYRANGE_READ:
+                return "KEYRANGE_READ";
             default:
                 return "FAILED Unexpected status type when serializing";
         }

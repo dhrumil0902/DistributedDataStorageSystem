@@ -4,7 +4,6 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import ecs.ECSNode;
 import ecs.IECSNode;
 
-import java.io.Serializable;
 import java.util.*;
 import java.io.*;
 
@@ -46,11 +45,19 @@ public class BST implements Serializable {
     }
 
     public String predecessor(String key) {
-        return bst.lowerKey(key);
+        String pred = bst.lowerKey(key);
+        if (pred == null) {
+            return max();
+        }
+        return pred;
     }
 
     public String successor(String key) {
-        return bst.higherKey(key);
+        String succ = bst.higherKey(key);
+        if (succ == null) {
+            return min();
+        }
+        return succ;
     }
 
     public void delete(String key) {
@@ -99,6 +106,29 @@ public class BST implements Serializable {
             return bst.firstEntry().getValue();
         }
         return entry.getValue();
+    }
+
+    // Create a new BST with the same nodes, where each node is responsible for replicating the ranges of the previous 2 nodes
+    public BST createReplicatedRange() {
+        BST replicatedRange = new BST();
+        String[] keys = new String[bst.size()];
+        int i = 0;
+        for (String key : bst.keySet()) {
+            keys[i++] = key;
+        }
+        for (i = 0; i < keys.length; i++) {
+            String key = keys[i];
+            IECSNode node = get(key);
+            String pred = predecessor(key);
+            if (predecessor(pred) != key) pred = predecessor(pred);
+            IECSNode predNode = get(pred);
+
+            String[] hashRange = {predNode.getNodeHashRange()[0], node.getNodeHashRange()[1]};
+
+            ECSNode newNode = new ECSNode(node.getNodeName(), node.getNodeHost(), node.getNodePort(), hashRange);
+            replicatedRange.put(key, newNode);
+        }
+        return replicatedRange;
     }
 
     public String print() {

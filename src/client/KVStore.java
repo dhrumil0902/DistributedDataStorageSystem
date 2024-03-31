@@ -110,6 +110,10 @@ public class KVStore implements KVCommInterface {
 	}
 
 	private void updateMetadata() throws Exception {
+		keyrange();
+	}
+
+	private void keyrange() throws Exception {
 		KVMessage metadataMessage = sendRequest("keyrange");
 		if (metadataMessage.getStatus() != KVMessage.StatusType.KEYRANGE_SUCCESS)
 			throw new Exception("Keyrange query failed");

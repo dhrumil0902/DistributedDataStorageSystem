@@ -23,3 +23,9 @@ localhost*
 
 *.log
 /.idea/
+
+
+*_localhost:*.txt
+*.log
+
+.idea/

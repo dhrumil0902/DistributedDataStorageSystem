@@ -696,6 +696,17 @@ public class KVServer implements IKVServer, Runnable {
         return message;
     }
 
+    public KVMessage handleKeyRangeReadMessage(KVMessage msg) {
+        KVMessage message = new KVMessageImpl();
+        message.setMetadata(metadata.createReplicatedRange());
+        if (message.getMetadata() == null) {
+            message.setStatus(KVMessage.StatusType.KEYRANGE_ERROR);
+        } else {
+            message.setStatus(KVMessage.StatusType.KEYRANGE_SUCCESS);
+        }
+        return message;
+    }
+
     public void updateMetadata(BST metadata) {
         if (this.metadata == null) {
             logger.info("Register to ECS success.");

@@ -61,11 +61,11 @@ public class KVStore implements KVCommInterface {
 	@Override
 	public KVMessage get(String key) throws Exception {
 		String request = "get " + key;
-		setServerForKey(key);
+		setRandomServerForKey(key);
 		KVMessage responseMessage = sendRequest(request);
 		if (responseMessage.getStatus() == KVMessage.StatusType.SERVER_NOT_RESPONSIBLE) {
 			updateMetadata();
-			setServerForKey(key);
+			setRandomServerForKey(key);
 			responseMessage = sendRequest(request);
 		}
 		return responseMessage;
@@ -128,6 +128,23 @@ public class KVStore implements KVCommInterface {
 	}
 
 	private void setServerForKey(String key) throws Exception {
+		String hashedKey = HashUtils.getHash(key);
+		if (metadata.isEmpty()) {
+            return;
+        }
+		
+		IECSNode node = metadata.getNodeFromKey(hashedKey);
+
+		if (!node.getNodeName().equals(nodeName)) {
+			disconnect();
+			this.address = node.getNodeHost();
+			this.port = node.getNodePort();
+			this.nodeName = node.getNodeName();
+			connect();
+		}
+	}
+
+	private void setRandomServerForKey(String key) throws Exception {
 		String hashedKey = HashUtils.getHash(key);
 		if (metadata.isEmpty()) {
             return;

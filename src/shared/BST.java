@@ -55,7 +55,7 @@ public class BST implements Serializable {
     public String successor(String key) {
         String succ = bst.higherKey(key);
         if (succ == null) {
-            return min();
+            succ = min();
         }
         return succ;
     }
@@ -106,6 +106,32 @@ public class BST implements Serializable {
             return bst.firstEntry().getValue();
         }
         return entry.getValue();
+    }
+
+    public IECSNode getRandomNodeForKey(String key) {
+        if (bst.isEmpty()) {
+            return null;
+        }
+
+        Map.Entry<String, ECSNode> entry = bst.higherEntry(key);
+        if (entry == null) {
+            entry = bst.firstEntry();
+        }
+
+        String coordinator = entry.getKey();
+        String replica1 = successor(coordinator);
+        String replica2 = successor(replica1);
+
+        String[] responsibleNodes = {coordinator, replica1, replica2};
+        int nodeIndex = new Random().nextInt(3);
+
+        if (replica2.equals(coordinator)) {
+            nodeIndex = new Random().nextInt(2);
+        }
+
+        IECSNode node = bst.get(responsibleNodes[nodeIndex]);
+
+        return node;
     }
 
     // Create a new BST with the same nodes, where each node is responsible for replicating the ranges of the previous 2 nodes

@@ -120,13 +120,20 @@ public class KVStore implements KVCommInterface {
 		metadata = metadataMessage.getMetadata();
 	}
 
+	private void keyrange_read() throws Exception {
+		KVMessage metadataMessage = sendRequest("keyrange_read");
+		if (metadataMessage.getStatus() != KVMessage.StatusType.KEYRANGE_READ_SUCCESS)
+			throw new Exception("Keyrange read query failed");
+		metadata = metadataMessage.getMetadata();
+	}
+
 	private void setServerForKey(String key) throws Exception {
 		String hashedKey = HashUtils.getHash(key);
 		if (metadata.isEmpty()) {
             return;
         }
 		
-		IECSNode node = metadata.getNodeFromKey(hashedKey);
+		IECSNode node = metadata.getRandomNodeForKey(hashedKey);
 
 		if (!node.getNodeName().equals(nodeName)) {
 			disconnect();

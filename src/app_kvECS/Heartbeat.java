@@ -25,7 +25,7 @@ public class Heartbeat {
 
     private static final long HEARTBEAT_INTERVAL_MS = 2000;
     private final Logger logger;
-    private boolean running = false;
+    public boolean running = false;
     private Lock lock = new ReentrantLock();
 
     public Heartbeat(ECSClient ecsClient) {

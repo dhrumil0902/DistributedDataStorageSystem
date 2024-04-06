@@ -59,6 +59,7 @@ public class Heartbeat {
 
 
     public void stop() {
+        running = false;
         scheduler.shutdown();
     }
 

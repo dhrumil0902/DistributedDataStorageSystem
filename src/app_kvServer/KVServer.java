@@ -435,6 +435,9 @@ public class KVServer implements IKVServer, Runnable {
         running = false;
         try {
             serverSocket.close();
+            for (ClientConnection connection : clientConnections) {
+                connection.close();
+            }
         } catch (IOException e) {
             logger.error("Error! " +
                     "Unable to close socket on port: " + port, e);

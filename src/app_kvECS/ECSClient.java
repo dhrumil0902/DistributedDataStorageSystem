@@ -44,8 +44,8 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
         this.port = port;
         this.address = address;
         startServer();
+        heartbeat = new Heartbeat(this);
         new Thread(() -> {
-            Heartbeat heartbeat = new Heartbeat(this);
             heartbeat.start();
         }).start();
     }
@@ -74,8 +74,12 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
     public void kill() {
         logger.info("Killing server.");
         running = false;
+        heartbeat.stop();
         try {
             serverSocket.close();
+            for (ServerConnection connection : clientConnections) {
+                connection.close();
+            }
         } catch (IOException e) {
             logger.error("Error! " +
                     "Unable to close socket on port: " + port, e);

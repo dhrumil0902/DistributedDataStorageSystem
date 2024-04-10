@@ -28,6 +28,8 @@ public class ECSMessage implements Serializable {
     public BST nodes;
     public String internalTransferHash;
     private String errorMessage = null;
+    public String ecsHost;
+    public int ecsPort;
 
     public ECSMessage() {
         this.action = null;

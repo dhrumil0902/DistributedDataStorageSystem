@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.AbstractMap.SimpleEntry;
 
+import app_kvECS.ECSClient;
 import app_kvServer.kvCache.FIFOCache;
 import app_kvServer.kvCache.IKVCache;
 import app_kvServer.kvCache.LFUCache;
@@ -45,8 +46,8 @@ public class KVServer implements IKVServer, Runnable {
     public final String storageDir;
     private String address;
     private int port;
-    private String ecsAddress;
-    private int ecsPort;
+    public String ecsAddress;
+    public int ecsPort;
     int cacheSize;
     CacheStrategy strategy;
     private ServerSocket serverSocket;
@@ -65,6 +66,7 @@ public class KVServer implements IKVServer, Runnable {
     public List<String> replicationsOfThisServer = new ArrayList<>();
     public Map<String, KVStorage> replicationsStored = new HashMap<>(); //hashvalue and storage
     private HeartbeatServer heartbeat;
+    private ECSClient ecsClient;
 
 
 //    public KVServer(int port, int cacheSize, String strategy) {
@@ -980,23 +982,26 @@ public class KVServer implements IKVServer, Runnable {
 
     private void onECSClientDown() throws Exception {
         logger.info("I AM THE NEW ESC CLIENT!");
+        this.heartbeat.stop();
         ECSNode removeNode = (ECSNode) metadata.get(this.hashValue);
         String removeNodeHash = removeNode.getNodeHashRange()[1];
 
         if (metadata.size() == 1) {
             metadata.delete(removeNodeHash);
-            return;
+           // return;
         }
-
-        String hashOfSuccessor = getSuccessor(removeNodeHash);
-        ECSNode successorNode = (ECSNode) metadata.get(hashOfSuccessor);
-        sendMessage(successorNode, new ECSMessage(ActionType.SET_WRITE_LOCK, true, null, null, metadata));
-        sendMessage(successorNode, new ECSMessage(ActionType.INTERNAL_TRANSFER, true, null, null, metadata, removeNodeHash));
-        sendMessage(successorNode, new ECSMessage(ActionType.UNSET_WRITE_LOCK, true, null, null, metadata));
-        successorNode.getNodeHashRange()[0] = removeNode.getNodeHashRange()[0];
-        metadata.delete(removeNodeHash);
-        // updateAllNodesMetaData();
+        else {
+            String hashOfSuccessor = getSuccessor(removeNodeHash);
+            ECSNode successorNode = (ECSNode) metadata.get(hashOfSuccessor);
+            sendMessage(successorNode, new ECSMessage(ActionType.SET_WRITE_LOCK, true, null, null, metadata));
+            sendMessage(successorNode, new ECSMessage(ActionType.INTERNAL_TRANSFER, true, null, null, metadata, removeNodeHash));
+            sendMessage(successorNode, new ECSMessage(ActionType.UNSET_WRITE_LOCK, true, null, null, metadata));
+            successorNode.getNodeHashRange()[0] = removeNode.getNodeHashRange()[0];
+            metadata.delete(removeNodeHash);
+        }
+        this.kill();
         logger.info("Removed a node from the bst, current state of bst: " + metadata.print());
+        ecsClient = new ECSClient(this.address, this.port, metadata);
         return;
     }
     public String getSuccessor(String startingHash) {

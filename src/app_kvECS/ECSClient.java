@@ -51,6 +51,20 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
         }).start();
     }
 
+    public ECSClient(String address, int port, BST metadata) {
+
+        nodes = new BST();
+        this.port = port;
+        this.address = address;
+        startServer();
+        nodes = metadata;
+        updateAllNodesMetaData();
+        heartbeat = new Heartbeat(this);
+        new Thread(() -> {
+            heartbeat.start();
+        }).start();
+    }
+
     @Override
     public void run() {
         this.running = initializeServer();
@@ -541,7 +555,10 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
         logger.info("Starting update of meta data of all nodes ...");
         for (ECSNode node : nodes.values()) {
             try {
-                sendMessage(node, new ECSMessage(ActionType.UPDATE_METADATA, true, null, null, nodes));
+                ECSMessage ecsMessage  = new ECSMessage(ActionType.UPDATE_METADATA, true, null, null, nodes);
+                ecsMessage.ecsPort = this.port;
+                ecsMessage.ecsHost = this.address;
+                sendMessage(node, ecsMessage);
             } catch (Exception e) {
                 logger.error("Could not successfully update the metadata of all nodes, error: " + e);
             }

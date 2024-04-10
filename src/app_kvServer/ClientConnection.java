@@ -230,6 +230,10 @@ public class ClientConnection implements Runnable {
             case UPDATE_METADATA:
                 logger.info("Received command UPDATE_METADATA: " + kvServer.getPort());
                 kvServer.updateMetadata(msg.getNodes());
+                if (msg.ecsHost != null && msg.ecsPort != 0){
+                    kvServer.ecsPort = msg.ecsPort;
+                    kvServer.ecsAddress = msg.ecsHost;
+                }
                 logger.info("Successfully updated metadata and replication info in: " + kvServer.getPort());
                 response.setSuccess(true);
                 break;

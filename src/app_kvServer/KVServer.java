@@ -11,9 +11,12 @@ import app_kvServer.kvCache.IKVCache;
 import app_kvServer.kvCache.LFUCache;
 import app_kvServer.kvCache.LRUCache;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import ecs.ECSNode;
+import ecs.IECSNode;
 import shared.BST;
+import shared.Heartbeat;
 import shared.messages.CoordMessage;
 import shared.messages.ECSMessage;
 import shared.messages.ECSMessage.ActionType;
@@ -61,8 +64,7 @@ public class KVServer implements IKVServer, Runnable {
     private List<String> coordinators = new ArrayList<>();
     public List<String> replicationsOfThisServer = new ArrayList<>();
     public Map<String, KVStorage> replicationsStored = new HashMap<>(); //hashvalue and storage
-
-
+    private HeartbeatServer heartbeat;
 
 
 //    public KVServer(int port, int cacheSize, String strategy) {
@@ -162,8 +164,7 @@ public class KVServer implements IKVServer, Runnable {
         // Check if the hash value already exists in the map
         if (replicationsStored.containsKey(hashValue)) {
             logger.warn("Data file for hash value " + hashValue + " already exists.");
-        } else
-        {
+        } else {
             String fileName = this.getPort() + "_" + nodeName + ".txt";
             String path = this.storageDir + File.separator + fileName;
             KVStorage storage = new KVStorage(path);
@@ -262,8 +263,8 @@ public class KVServer implements IKVServer, Runnable {
         logger.info("Storage file path: " + storage.filePath);
         logger.info(String.format("PutKV: %s %s", key, value));
 
-        if (!replicationsStored.containsKey(hashValue)){
-           // addReplicationFile(hashValue);
+        if (!replicationsStored.containsKey(hashValue)) {
+            // addReplicationFile(hashValue);
         }
         KVStorage replicaStorage = replicationsStored.get(hashValue);
         // Put kv to storage
@@ -410,10 +411,15 @@ public class KVServer implements IKVServer, Runnable {
                 connectToCentralServer();
             }
         }).start();
-
         if (serverSocket != null) {
             while (isRunning()) {
                 try {
+                    if (heartbeat == null) {
+                        heartbeat = new HeartbeatServer(this);
+                        new Thread(() -> {
+                            heartbeat.start();
+                        }).start();
+                    }
                     Socket client = serverSocket.accept();
                     ClientConnection connection = new ClientConnection(client, this);
                     clientConnections.add(connection);
@@ -519,9 +525,9 @@ public class KVServer implements IKVServer, Runnable {
             msg.setData(getAllData());
             msg.setAction(ActionType.DELETE);
             msg.setServerInfo(address, port);
-            if (metadata.size() > 1){
+            if (metadata.size() > 1) {
                 logger.info("Removing all the data from: " + port);
-                removeData("00000000000000000000000000000000","FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
+                removeData("00000000000000000000000000000000", "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
             }
             ObjectMapper mapper = new ObjectMapper();
             try {
@@ -569,15 +575,14 @@ public class KVServer implements IKVServer, Runnable {
                     return response;
                 }
             }
-        }
-        else if (checkKeyRangeForReplicas(key)){
+        } else if (checkKeyRangeForReplicas(key)) {
             response.setKey(key);
             synchronized (lock) {
                 try {
                     logger.info("SERVER: Trying to GET the value from replicas associated with Key '" + key);
                     String nodeHash = metadata.getNodeFromKey(HashUtils.getHash(key)).getNodeHashRange()[1];
                     String value = null;
-                    if (nodeHash != null){
+                    if (nodeHash != null) {
                         value = replicationsStored.get(nodeHash).getKV(key);
                     }
 
@@ -593,8 +598,7 @@ public class KVServer implements IKVServer, Runnable {
                     return response;
                 }
             }
-        }
-        else {
+        } else {
             response.setStatus(StatusType.SERVER_NOT_RESPONSIBLE);
             response.setMetadata(this.metadata);
         }
@@ -604,16 +608,16 @@ public class KVServer implements IKVServer, Runnable {
 
     private boolean checkKeyRangeForReplicas(String key) {
         String nodeHash = metadata.getNodeFromKey(HashUtils.getHash(key)).getNodeHashRange()[1];
-        if (nodeHash != null){
+        if (nodeHash != null) {
             return replicationsStored.containsKey(nodeHash);
         }
         return false;
     }
 
     private String getKVFromReplicas(String key) {
-        for (KVStorage replicaStorage : replicationsStored.values()){
+        for (KVStorage replicaStorage : replicationsStored.values()) {
             String value = replicaStorage.getKV(key);
-            if ( value != null && !value.isEmpty()){
+            if (value != null && !value.isEmpty()) {
                 return value;
             }
         }
@@ -723,15 +727,15 @@ public class KVServer implements IKVServer, Runnable {
     }
 
     private synchronized void updateReplicaInfo() {
-    ECSNode node = (ECSNode) metadata.get(this.getHashValue());
+        ECSNode node = (ECSNode) metadata.get(this.getHashValue());
         List<String> previousReplicationsOfThisServer = replicationsOfThisServer;
         replicationsOfThisServer = node.successors;
-        for (String hashofPredecessors: node.predecessors ) {
-            if (!replicationsStored.containsKey(hashofPredecessors)){
+        for (String hashofPredecessors : node.predecessors) {
+            if (!replicationsStored.containsKey(hashofPredecessors)) {
                 addReplicationFile(hashofPredecessors);
             }
         }
-        synchronized(this) {
+        synchronized (this) {
             Set<String> keys = this.replicationsStored.keySet();
             Iterator<String> iterator = keys.iterator();
             while (iterator.hasNext()) {
@@ -746,15 +750,15 @@ public class KVServer implements IKVServer, Runnable {
         }
         // add if condition, if time permits to fix bug
         //if(!replicationsOfThisServer.equals(previousReplicationsOfThisServer)){
-            CoordMessage msg = new CoordMessage(this.getHashValue());
-            msg.setAction(CoordMessage.ActionType.FORCE_SYNC);
-            msg.nodes = this.metadata;
-            try {
-                msg.setData(storage.getAllData());
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-            updateReplica(msg);
+        CoordMessage msg = new CoordMessage(this.getHashValue());
+        msg.setAction(CoordMessage.ActionType.FORCE_SYNC);
+        msg.nodes = this.metadata;
+        try {
+            msg.setData(storage.getAllData());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        updateReplica(msg);
         //}
     }
 
@@ -770,7 +774,9 @@ public class KVServer implements IKVServer, Runnable {
         return this.metadata;
     }
 
-    public String getHashValue() {return this.hashValue;}
+    public String getHashValue() {
+        return this.hashValue;
+    }
 
     public void setCoordinators(ECSNode node) {
         for (String predecessor : node.getPredecessors()) {
@@ -803,7 +809,9 @@ public class KVServer implements IKVServer, Runnable {
         }
     }
 
-    public boolean checkRegisterStatus() {return this.register;}
+    public boolean checkRegisterStatus() {
+        return this.register;
+    }
 
     private static String generateHelpString() {
         return "Usage: java KVServer [-p <port>] [-a <address>] [-d <directory>] [-l <logFile>] [-ll <logLevel>] [-c <cacheSize>] [-cs <cacheStrategy>]\n"
@@ -915,5 +923,120 @@ public class KVServer implements IKVServer, Runnable {
             System.out.println("Unexpected error:\n" + e.getMessage());
             System.exit(1);
         }
+    }
+
+    public ECSMessage sendMessage(String host, int port, ECSMessage msg) throws Exception {
+        try (Socket ECSSocket = new Socket(host, port)) {
+            // Setup input and output streams
+            BufferedWriter out = new BufferedWriter(new OutputStreamWriter(ECSSocket.getOutputStream(), StandardCharsets.UTF_8));
+            BufferedReader in = new BufferedReader(new InputStreamReader(ECSSocket.getInputStream(), StandardCharsets.UTF_8));
+
+            ObjectMapper mapper = new ObjectMapper();
+            String jsonString = mapper.writeValueAsString(msg);
+
+            logger.info("Send message: " + jsonString);
+
+//            out.writeObject(msg);
+            out.write(jsonString);
+            out.newLine();
+            out.flush();
+
+            // Wait for a response from the central server
+            try {
+                String response = in.readLine();
+                return new ObjectMapper().readValue(response, ECSMessage.class);
+            } catch (JsonMappingException ex) {
+                logger.error("Error during message deserialization.", ex);
+            }
+        } catch (Exception ex) {
+            logger.error("While trying to receive/send message received error");
+        }
+        return null;
+    }
+
+    public synchronized void sendHeartbeats() {
+        logger.info("In sendHeartbeat Function: " + this.getPort());
+        if (ecsAddress == null || ecsAddress.isEmpty() || ecsPort == 0 || metadata == null) {
+            logger.info("Ecs client info not set yet " + this.getPort());
+            return;
+        }
+        logger.info("Sending HeartBeats From Server: " + this.getPort());
+        try {
+            ECSMessage heartbeatMsg = new ECSMessage(ActionType.HEARTBEAT, true, null, null, null);
+            ECSMessage response = this.sendMessage(ecsAddress, ecsPort, heartbeatMsg);
+            if (response == null || !response.success) {
+                logger.info("Failed to receive heartbeat response from ecsclient");
+                if (((ECSNode) metadata.get(this.getHashValue())).priorityNum == metadata.getMaxPriorityNum()) {
+                    onECSClientDown();
+                }
+            } else {
+                logger.info("Received heartbeat response from ecsclient ");
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Not good!");
+            // logger.error("Error sending heartbeat to ecsclient");
+        }
+    }
+
+    private void onECSClientDown() throws Exception {
+        logger.info("I AM THE NEW ESC CLIENT!");
+        ECSNode removeNode = (ECSNode) metadata.get(this.hashValue);
+        String removeNodeHash = removeNode.getNodeHashRange()[1];
+
+        if (metadata.size() == 1) {
+            metadata.delete(removeNodeHash);
+            return;
+        }
+
+        String hashOfSuccessor = getSuccessor(removeNodeHash);
+        ECSNode successorNode = (ECSNode) metadata.get(hashOfSuccessor);
+        sendMessage(successorNode, new ECSMessage(ActionType.SET_WRITE_LOCK, true, null, null, metadata));
+        sendMessage(successorNode, new ECSMessage(ActionType.INTERNAL_TRANSFER, true, null, null, metadata, removeNodeHash));
+        sendMessage(successorNode, new ECSMessage(ActionType.UNSET_WRITE_LOCK, true, null, null, metadata));
+        successorNode.getNodeHashRange()[0] = removeNode.getNodeHashRange()[0];
+        metadata.delete(removeNodeHash);
+        // updateAllNodesMetaData();
+        logger.info("Removed a node from the bst, current state of bst: " + metadata.print());
+        return;
+    }
+    public String getSuccessor(String startingHash) {
+        if (metadata.isEmpty()) {
+            return null;
+        }
+
+        if (metadata.successor(startingHash) != null) {
+            return metadata.successor(startingHash);
+        }
+
+        return metadata.min();
+    }
+
+    public ECSMessage sendMessage(ECSNode node, ECSMessage msg) throws Exception {
+        try (Socket ECSSocket = new Socket(node.getNodeHost(), node.getNodePort())) {
+            // Setup input and output streams
+            BufferedWriter out = new BufferedWriter(new OutputStreamWriter(ECSSocket.getOutputStream(), StandardCharsets.UTF_8));
+            BufferedReader in = new BufferedReader(new InputStreamReader(ECSSocket.getInputStream(), StandardCharsets.UTF_8));
+
+            ObjectMapper mapper = new ObjectMapper();
+            String jsonString = mapper.writeValueAsString(msg);
+
+            logger.info("Send message: " + jsonString);
+
+//            out.writeObject(msg);
+            out.write(jsonString);
+            out.newLine();
+            out.flush();
+
+            // Wait for a response from the central server
+            String response = in.readLine();
+            try {
+                return new ObjectMapper().readValue(response, ECSMessage.class);
+            } catch (JsonMappingException ex) {
+                logger.error("Error during message deserialization.", ex);
+            }
+        } catch (Exception ex) {
+            logger.error("While trying to receive/send message received error");
+        }
+        return null;
     }
 }

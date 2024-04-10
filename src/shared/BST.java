@@ -11,7 +11,6 @@ import java.io.*;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class BST implements Serializable {
     public TreeMap<String, ECSNode> bst;
-
     public BST() {
         bst = new TreeMap<>();
     }
@@ -166,5 +165,15 @@ public class BST implements Serializable {
                     .append("\n");
         }
         return sb.toString();
+    }
+
+    public int getMaxPriorityNum() {
+        int max = 0;
+        for (ECSNode node: this.values()){
+            if (node.priorityNum > max){
+                max = node.priorityNum;
+            }
+        }
+        return max;
     }
 }

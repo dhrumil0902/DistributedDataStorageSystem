@@ -16,7 +16,7 @@ public class ECSMessage implements Serializable {
         REMOVE, // remove all keys in the range field, and return those KV pairs, stored in data. success = true
         UPDATE_METADATA, // "nodes" field is filled with metadata, simply update kvserver's "nodes" field and return success = true
         HEARTBEAT,
-        INTERNAL_TRANSFER
+        None, INTERNAL_TRANSFER
 
     }
 

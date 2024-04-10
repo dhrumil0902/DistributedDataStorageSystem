@@ -14,6 +14,7 @@ public class ECSNode implements IECSNode, Serializable {
     private String strategy;
     public List<String> predecessors = new ArrayList<>(2);
     public List<String> successors = new ArrayList<>(2);
+    public int priorityNum = 0;
 
     public ECSNode() {}
 

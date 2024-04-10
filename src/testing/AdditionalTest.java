@@ -1,23 +1,18 @@
 package testing;
 
-import app_kvECS.Heartbeat;
+import shared.Heartbeat;
 import app_kvServer.KVServer;
-import ecs.ECSNode;
 import logger.LogSetup;
 import org.apache.log4j.Level;
 import org.junit.Test;
 import app_kvECS.ECSClient;
 import junit.framework.TestCase;
-import org.junit.experimental.theories.Theories;
-import shared.BST;
 import shared.messages.CoordMessage;
 import shared.messages.KVMessage;
 import shared.messages.KVMessageImpl;
 import shared.utils.HashUtils;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 

@@ -9,6 +9,7 @@ import org.apache.log4j.*;
 import shared.messages.ECSMessage;
 import shared.messages.KVMessage;
 import shared.messages.KVMessageImpl;
+import shared.utils.CommUtils;
 
 import java.net.Socket;
 import java.io.*;
@@ -115,6 +116,12 @@ public class ServerConnection implements Runnable{
 					logger.error("Server info (address and port) not properly set in ECSMessage.");
 				}
 				return;
+			case HEARTBEAT:
+				logger.info("Received command HEARTBEAT");
+				CommUtils.sendECSMessage(new ECSMessage(ECSMessage.ActionType.None, true, null, null, null), this.output);
+				//sendMessage(new ECSMessage(ECSMessage.ActionType.None, true, null, null, null));
+				logger.info("Message SENTTTTTT");
+				break;
 			default:
 				logger.error("Unknown action.");
 		}
@@ -122,7 +129,6 @@ public class ServerConnection implements Runnable{
 	private void sendMessage(ECSMessage responseMessage) throws IOException {
 		ObjectMapper mapper = new ObjectMapper();
 		String jsonString = mapper.writeValueAsString(responseMessage);
-
 		output.write(jsonString);
 		output.flush();
 	}

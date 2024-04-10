@@ -18,6 +18,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import ecs.ECSNode;
 import ecs.IECSNode;
 import shared.BST;
+import shared.Heartbeat;
 import shared.messages.ECSMessage;
 import shared.messages.ECSMessage.ActionType;
 import shared.utils.HashUtils;
@@ -402,6 +403,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
                 String hashCode = HashUtils.getHash(address + ":" + port);
                 String[] hashRange = {getStartNodeHash(hashCode), hashCode};
                 ECSNode newNode = new ECSNode(address + ":" + port, address, port, hashRange);
+                newNode.priorityNum = nodes.getMaxPriorityNum() + 1;
                 List<String> kvToTransfer = new ArrayList<String>();
                 nodes.put(hashCode, newNode);
                 if (nodes.size() > 1) {

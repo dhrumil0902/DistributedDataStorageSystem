@@ -575,4 +575,53 @@ public class AdditionalTest extends TestCase {
         }
     }
 
+    @Test
+    public void testLeaderElection() {
+        try {
+            new LogSetup("test4.log", Level.ALL);
+            int ecsPort = 5100;
+            ECSClient ecs = new ECSClient("localhost", ecsPort);
+            KVServer server0 = new KVServer("localhost", ecsPort, "localhost", 42609,
+                    0, "None", System.getProperty("user.dir"));
+            KVServer server1 = new KVServer("localhost", ecsPort, "localhost", 42157,
+                    0, "None", System.getProperty("user.dir"));
+            KVServer server2 = new KVServer("localhost", ecsPort, "localhost", 38977,
+                    0, "None", System.getProperty("user.dir"));
+            KVServer[] servers = new KVServer[]{server0, server1, server2};
+            String[] keys = new String[]{"abc", "key", "zzz"};
+            Thread.sleep(3000);
+            server0.putKV("abc", "val");
+            server1.putKV("key", "val");
+            server2.putKV("zzz", "val");
+
+            ecs.kill();
+            Thread.sleep(5000);
+            KVServer leader = server0;
+            String leaderKey = keys[0];
+
+            for (int i = 1; i < servers.length; i++) {
+                if (servers[i].getPriorityNum() > leader.getPriorityNum()) {
+                    leader = servers[i];
+                    leaderKey = keys[i];
+                }
+            }
+            assert leader.ecsClient != null;
+            // TODO: test kv transfer after LE if send sync message manually
+//            for (KVServer server : servers) {
+//                if (server != leader) {
+//                    assertEquals(server.getKV(leaderKey), "val");
+//                }
+//            }
+            ecsPort = leader.getPort();
+
+            KVServer server3 = new KVServer("localhost", ecsPort, "localhost", 46683,
+                    0, "None", System.getProperty("user.dir"));
+            Thread.sleep(3000);
+            // server3 should be registered
+            assert server2.checkRegisterStatus();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
 }

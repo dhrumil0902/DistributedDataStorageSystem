@@ -76,10 +76,10 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
                     clientConnections.add(connection);
                     new Thread(connection).start();
 
-                    logger.info(
-                            "From Server: Connected to " + client.getInetAddress().getHostName() + " on port " + client.getPort());
+                    logger.info(String.format("ECS: Establish connection on %s to %s.", client.getPort(),
+                            client.getInetAddress().getHostName()));
                 } catch (IOException e) {
-                    logger.error("Error! Unable to establish connection. \n", e);
+                    logger.error("ECS: client disconnect from server socket.");
                 }
             }
         }
@@ -87,7 +87,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
     }
 
     public void kill() {
-        logger.info("Killing server.");
+        logger.info("ECS: Killing server.");
         running = false;
         heartbeat.stop();
         try {
@@ -352,7 +352,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
             successorNode.getNodeHashRange()[0] = removeNode.getNodeHashRange()[0];
             nodes.delete(removeNodeHash);
             updateAllNodesMetaData();
-            logger.info("Removed a node from the bst, current state of bst: " + nodes.print());
+            logger.info("Removed a node from the bst, current state of bst: \n" + nodes.print());
             return true;
         }
     }
@@ -374,7 +374,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
             successorNode.getNodeHashRange()[0] = removeNode.getNodeHashRange()[0];
             nodes.delete(removeNodeHash);
             updateAllNodesMetaData();
-            logger.info("Removed a node from the bst, current state of bst: " + nodes.print());
+            logger.info("Removed a node from the bst, current state of bst: \n" + nodes.print());
             return true;
         }
     }
@@ -424,7 +424,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
                     ECSNode successorNode = (ECSNode) nodes.get(getSuccessor(hashCode));
                     successorNode.getNodeHashRange()[0] = hashCode;
                     if (dataTransfer(newNode, successorNode)) {
-                        logger.info("Added new node to the bst, current state of bst: " + nodes.print());
+                        logger.info("ECS: Added new node to the bst, current state of bst: \n" + nodes.print());
                         updateAllNodesMetaData();
                     }
                     ECSMessage sucNodeMsg = new ECSMessage();
@@ -435,7 +435,7 @@ public class ECSClient implements IECSClient, Runnable, Serializable {
                         logger.error("Couldn't UNSET write lock.");
                     }
                 }
-                logger.info("Added new node to the bst, current state of bst: " + nodes.print());
+                logger.info("Added new node to the bst, current state of bst: \n" + nodes.print());
                 updateAllNodesMetaData();
             }
             logger.info("Unknown message type: " + message);

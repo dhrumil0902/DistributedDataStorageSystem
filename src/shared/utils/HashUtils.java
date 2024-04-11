@@ -47,7 +47,7 @@ public class HashUtils {
     }
 
     public static void main(String[] args) {
-        String key = "key";
+        String key = "zzz";
         System.out.println(getHash(key));
     }
 }

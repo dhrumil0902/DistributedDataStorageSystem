@@ -57,7 +57,7 @@ public class KVServer implements IKVServer, Runnable {
     private IKVCache cache;
     private KVStorage storage;
     private final Object lock = new Object();
-    private String serverName;
+    public String serverName;
     private String hashValue;
     public BST metadata;
     private boolean writeLock;
@@ -66,7 +66,9 @@ public class KVServer implements IKVServer, Runnable {
     public List<String> replicationsOfThisServer = new ArrayList<>();
     public Map<String, KVStorage> replicationsStored = new HashMap<>(); //hashvalue and storage
     private HeartbeatServer heartbeat;
-    private ECSClient ecsClient;
+    public ECSClient ecsClient;
+    public int priorityNum;
+    public boolean isLeader;
 
 
 //    public KVServer(int port, int cacheSize, String strategy) {
@@ -88,6 +90,8 @@ public class KVServer implements IKVServer, Runnable {
         this.register = false;
         this.serverName = address + ":" + port;
         this.hashValue = HashUtils.getHash(serverName);
+        this.isLeader = false;
+        this.ecsClient = null;
         try {
             this.strategy = CacheStrategy.valueOf(strategy);
         } catch (IllegalArgumentException e) {
@@ -161,7 +165,7 @@ public class KVServer implements IKVServer, Runnable {
         }
 
         // Get the node name from metadata using the hash value
-        String nodeName = metadata.get(hashValue).getNodeName();
+        String nodeName = metadata.get(hashValue).getNodeHost() + "-" + metadata.get(hashValue).getNodePort();
 
         // Check if the hash value already exists in the map
         if (replicationsStored.containsKey(hashValue)) {
@@ -430,7 +434,7 @@ public class KVServer implements IKVServer, Runnable {
                     logger.info(
                             "From Server: Connected to " + client.getInetAddress().getHostName() + " on port " + client.getPort());
                 } catch (IOException e) {
-                    logger.error("Error! Unable to establish connection. \n", e);
+                    logger.info(String.format("%s: client disconnect from server socket.", serverName));
                 }
             }
         }
@@ -439,7 +443,7 @@ public class KVServer implements IKVServer, Runnable {
 
     @Override
     public void kill() {
-        logger.info("Killing server.");
+        logger.info(String.format("%s: Killing server.", serverName));
         running = false;
         try {
             serverSocket.close();
@@ -447,8 +451,7 @@ public class KVServer implements IKVServer, Runnable {
                 connection.close();
             }
         } catch (IOException e) {
-            logger.error("Error! " +
-                    "Unable to close socket on port: " + port, e);
+            logger.error("Error! " + "Unable to close socket on port: " + port, e);
         }
     }
 
@@ -717,13 +720,18 @@ public class KVServer implements IKVServer, Runnable {
     }
 
     public void updateMetadata(BST metadata) {
+        // Log success message only if this is the initial setup
         if (this.metadata == null) {
             logger.info("Register to ECS success.");
-            this.metadata = metadata;
-            this.register = true;
-            updateReplicaInfo();
-            return;
+            this.register = true; // Mark as registered only during the initial setup
         }
+
+        // Common operations for both initial setup and subsequent updates
+        ECSNode curNode = (ECSNode) metadata.get(hashValue);
+        if (curNode != null) { // Adding null check for safety
+            this.priorityNum = curNode.priorityNum;
+        }
+
         this.metadata = metadata;
         updateReplicaInfo();
     }
@@ -779,6 +787,8 @@ public class KVServer implements IKVServer, Runnable {
     public String getHashValue() {
         return this.hashValue;
     }
+
+    public int getPriorityNum() {return this.priorityNum;}
 
     public void setCoordinators(ECSNode node) {
         for (String predecessor : node.getPredecessors()) {
@@ -957,20 +967,20 @@ public class KVServer implements IKVServer, Runnable {
     }
 
     public synchronized void sendHeartbeats() {
-        logger.info("In sendHeartbeat Function: " + this.getPort());
+        logger.info(String.format("%s: Send heartbeat to %s:%s", serverName, ecsAddress, ecsPort));
         if (ecsAddress == null || ecsAddress.isEmpty() || ecsPort == 0 || metadata == null) {
-            logger.info("Ecs client info not set yet " + this.getPort());
+            logger.info("ECS client info not set yet " + this.getPort());
             return;
         }
-        logger.info("Sending HeartBeats From Server: " + this.getPort());
         try {
             ECSMessage heartbeatMsg = new ECSMessage(ActionType.HEARTBEAT, true, null, null, null);
             ECSMessage response = this.sendMessage(ecsAddress, ecsPort, heartbeatMsg);
             if (response == null || !response.success) {
                 logger.info("Failed to receive heartbeat response from ecsclient");
-                if (((ECSNode) metadata.get(this.getHashValue())).priorityNum == metadata.getMaxPriorityNum()) {
-                    onECSClientDown();
-                }
+                initiateElection();
+//                if (((ECSNode) metadata.get(this.getHashValue())).priorityNum == metadata.getMaxPriorityNum()) {
+//                    onECSClientDown();
+//                }
             } else {
                 logger.info("Received heartbeat response from ecsclient ");
             }
@@ -980,8 +990,44 @@ public class KVServer implements IKVServer, Runnable {
         }
     }
 
-    private void onECSClientDown() throws Exception {
-        logger.info("I AM THE NEW ESC CLIENT!");
+    public void initiateElection() {
+        logger.info(String.format("%s: Start leader election.", this.serverName));
+        logger.info(String.format("%s: priority number: %s", serverName, priorityNum));
+        synchronized (this) {
+            if (!isLeader) {
+                boolean success = true;
+                for (ECSNode node: metadata.values()) {
+                    if (node.priorityNum > this.priorityNum) {
+                        // Broadcast election message to nodes with higher ID
+                        ECSMessage electionMsg = new ECSMessage();
+                        electionMsg.setSenderID(this.priorityNum);
+                        electionMsg.setAction(ActionType.ELECTION);
+                        ECSMessage response = sendMessage(node, electionMsg);
+                        if (response != null & response.getAction() == ActionType.ELECTION & response.success) {
+                            success = false;
+                        }
+                    }
+                }
+                logger.info(String.format("%s: Finish leader election.", this.serverName));
+                if (success) {
+                    onECSClientDown();
+                }
+            }
+        }
+    }
+
+    private void declareVictory() {
+
+    }
+
+    private void onECSClientDown() {
+        if (!isLeader) {
+            isLeader = true;
+        } else {
+            logger.info(String.format("%s: Already the leader.", serverName));
+            return;
+        }
+        logger.info(String.format("%s: Transform to ECSClient...", serverName));
         this.heartbeat.stop();
         ECSNode removeNode = (ECSNode) metadata.get(this.hashValue);
         String removeNodeHash = removeNode.getNodeHashRange()[1];
@@ -1002,8 +1048,9 @@ public class KVServer implements IKVServer, Runnable {
         this.kill();
         logger.info("Removed a node from the bst, current state of bst: " + metadata.print());
         ecsClient = new ECSClient(this.address, this.port, metadata);
-        return;
+        logger.info(String.format("%s: Transform to ECSClient finish.", serverName));
     }
+
     public String getSuccessor(String startingHash) {
         if (metadata.isEmpty()) {
             return null;
@@ -1016,18 +1063,20 @@ public class KVServer implements IKVServer, Runnable {
         return metadata.min();
     }
 
-    public ECSMessage sendMessage(ECSNode node, ECSMessage msg) throws Exception {
-        try (Socket ECSSocket = new Socket(node.getNodeHost(), node.getNodePort())) {
+    public ECSMessage sendMessage(ECSNode node, ECSMessage msg) {
+        try (Socket socket = new Socket()) {
+//            int timeout = 5000;
+//            socket.connect(new InetSocketAddress(node.getNodeHost(), node.getNodePort()), timeout);
+            socket.connect(new InetSocketAddress(node.getNodeHost(), node.getNodePort()));
             // Setup input and output streams
-            BufferedWriter out = new BufferedWriter(new OutputStreamWriter(ECSSocket.getOutputStream(), StandardCharsets.UTF_8));
-            BufferedReader in = new BufferedReader(new InputStreamReader(ECSSocket.getInputStream(), StandardCharsets.UTF_8));
+            BufferedWriter out = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8));
+            BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
 
             ObjectMapper mapper = new ObjectMapper();
             String jsonString = mapper.writeValueAsString(msg);
 
             logger.info("Send message: " + jsonString);
 
-//            out.writeObject(msg);
             out.write(jsonString);
             out.newLine();
             out.flush();
@@ -1039,6 +1088,8 @@ public class KVServer implements IKVServer, Runnable {
             } catch (JsonMappingException ex) {
                 logger.error("Error during message deserialization.", ex);
             }
+        } catch (SocketTimeoutException ex) {
+            logger.error("The socket operation timed out.", ex);
         } catch (Exception ex) {
             logger.error("While trying to receive/send message received error");
         }

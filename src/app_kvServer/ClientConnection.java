@@ -1,6 +1,7 @@
 package app_kvServer;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import ecs.ECSNode;
 import org.apache.log4j.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonMappingException;
@@ -244,8 +245,28 @@ public class ClientConnection implements Runnable {
             case DELETE:
                 kvServer.close();
                 break;
+            case ELECTION:
+                logger.info(String.format("%s: Received ELECTION message.", kvServer.serverName));
+                ECSNode curNode = (ECSNode) kvServer.metadata.get(kvServer.getHashValue());
+                int curID = curNode.priorityNum;
+                if (msg.getSenderID() < curID) {
+                    response.setSuccess(true);
+                    new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                            kvServer.initiateElection();
+                        }
+                    }).start();
+                } else if (msg.getSenderID() > curID) {
+                    // Ideally should not receive election message from lower nodes
+                    response.setSuccess(false);
+                } else {
+                    logger.error(String.format("%s: Unexpected case, same priority number %d", kvServer.serverName, curID));
+                    response.setSuccess(false);
+                }
+                break;
             default:
-                logger.error("Unknown message from ECS: " + msg);
+                logger.error(String.format("%s: Unknown message from ECS: %s",kvServer.serverName, msg.getAction()));
         }
         CommUtils.sendECSMessage(response, this.output);
 //        sendECSMessage(response);

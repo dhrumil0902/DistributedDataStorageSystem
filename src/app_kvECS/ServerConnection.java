@@ -117,10 +117,10 @@ public class ServerConnection implements Runnable{
 				}
 				return;
 			case HEARTBEAT:
-				logger.info("Received command HEARTBEAT");
+				logger.info("ECS: Receive HEARTBEAT from server.");
 				CommUtils.sendECSMessage(new ECSMessage(ECSMessage.ActionType.None, true, null, null, null), this.output);
 				//sendMessage(new ECSMessage(ECSMessage.ActionType.None, true, null, null, null));
-				logger.info("Message SENTTTTTT");
+//				logger.info("Message SENTTTTTT");
 				break;
 			default:
 				logger.error("Unknown action.");

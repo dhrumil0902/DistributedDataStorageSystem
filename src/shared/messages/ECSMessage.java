@@ -16,8 +16,9 @@ public class ECSMessage implements Serializable {
         REMOVE, // remove all keys in the range field, and return those KV pairs, stored in data. success = true
         UPDATE_METADATA, // "nodes" field is filled with metadata, simply update kvserver's "nodes" field and return success = true
         HEARTBEAT,
-        None, INTERNAL_TRANSFER
-
+        None,
+        INTERNAL_TRANSFER,
+        ELECTION
     }
 
     private ActionType action;
@@ -30,6 +31,8 @@ public class ECSMessage implements Serializable {
     private String errorMessage = null;
     public String ecsHost;
     public int ecsPort;
+
+    private int senderID;
 
     public ECSMessage() {
         this.action = null;
@@ -94,4 +97,8 @@ public class ECSMessage implements Serializable {
     public String[] getRange() {return this.range;}
 
     public void setRange(String[] range) {this.range = range;}
+
+    public int getSenderID() {return this.senderID;}
+
+    public void setSenderID(int id) {this.senderID = id;}
 }

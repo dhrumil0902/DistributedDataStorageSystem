@@ -1,6 +1,7 @@
 package testing;
 
 import client.KVStore;
+import junit.framework.Assert;
 import shared.Heartbeat;
 import app_kvServer.KVServer;
 import logger.LogSetup;
@@ -14,6 +15,9 @@ import shared.messages.KVMessageImpl;
 import shared.utils.HashUtils;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -179,11 +183,11 @@ public class AdditionalTest extends TestCase {
             server2.close();
             Thread.sleep(1000);
             assertEquals(0, client.nodes.size());
-        }
-        catch (InterruptedException e) {
+        } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
     }
+
     @Test
     public void testPersistentStorage() {
         try {
@@ -211,7 +215,7 @@ public class AdditionalTest extends TestCase {
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
-        server.removeData("00000000000000000000000000000000","FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
+        server.removeData("00000000000000000000000000000000", "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
         try {
             assertEquals("testvalue", server2.getKV("testkey"));
         } catch (Exception e) {
@@ -318,6 +322,7 @@ public class AdditionalTest extends TestCase {
             throw new RuntimeException(e);
         }
     }
+
     @Test
     public void testPutOperation() {
         try {
@@ -416,6 +421,7 @@ public class AdditionalTest extends TestCase {
             throw new RuntimeException(e);
         }
     }
+
     @Test
     public void testDeleteOperation() {
         try {
@@ -460,6 +466,7 @@ public class AdditionalTest extends TestCase {
             throw new RuntimeException(e);
         }
     }
+
     @Test
     public void testDirectPutToReplica() {
         try {
@@ -521,8 +528,7 @@ public class AdditionalTest extends TestCase {
 
         try {
             primaryServer.close();
-        }
-        catch (Exception e){
+        } catch (Exception e) {
             throw new RuntimeException(e);
         }
         try {
@@ -577,49 +583,93 @@ public class AdditionalTest extends TestCase {
     }
 
     @Test
-    public void testLeaderElection() {
+    public void testHighestPriorityNumWinsElection() {
         try {
-            new LogSetup("test4.log", Level.ALL);
-            int ecsPort = 5100;
-            ECSClient ecs = new ECSClient("localhost", ecsPort);
-            KVServer server0 = new KVServer("localhost", ecsPort, "localhost", 42609,
+            new LogSetup("test3.log", Level.ALL);
+            ECSClient ecs = new ECSClient("localhost", 5100);
+            KVServer server0 = new KVServer("localhost", 5100, "localhost", 42609,
                     0, "None", System.getProperty("user.dir"));
-            KVServer server1 = new KVServer("localhost", ecsPort, "localhost", 42157,
+            Thread.sleep(1000);
+            KVServer server1 = new KVServer("localhost", 5100, "localhost", 42157,
                     0, "None", System.getProperty("user.dir"));
-            KVServer server2 = new KVServer("localhost", ecsPort, "localhost", 38977,
+            Thread.sleep(1000);
+            KVServer server2 = new KVServer("localhost", 5100, "localhost", 46683,
                     0, "None", System.getProperty("user.dir"));
-            KVServer[] servers = new KVServer[]{server0, server1, server2};
-            String[] keys = new String[]{"abc", "key", "zzz"};
-            Thread.sleep(3000);
-            server0.putKV("abc", "val");
-            server1.putKV("key", "val");
-            server2.putKV("zzz", "val");
+            Thread.sleep(1000);
+
+            List<KVServer> servers = new ArrayList<>();
+            servers.add(server0);
+            servers.add(server1);
+            servers.add(server2);
+
+            KVServer serverWithHighestPriority = servers.stream()
+                    .max(Comparator.comparingInt(KVServer::getPriorityNum))
+                    .orElse(null);
 
             ecs.kill();
-            Thread.sleep(5000);
-            KVServer leader = server0;
-            String leaderKey = keys[0];
+            Thread.sleep(4000);
+            Assert.assertNotNull(serverWithHighestPriority.ecsClient);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 
-            for (int i = 1; i < servers.length; i++) {
-                if (servers[i].getPriorityNum() > leader.getPriorityNum()) {
-                    leader = servers[i];
-                    leaderKey = keys[i];
-                }
-            }
-            assert leader.ecsClient != null;
-            // TODO: test kv transfer after LE if send sync message manually
-//            for (KVServer server : servers) {
-//                if (server != leader) {
-//                    assertEquals(server.getKV(leaderKey), "val");
-//                }
-//            }
-            ecsPort = leader.getPort();
-
-            KVServer server3 = new KVServer("localhost", ecsPort, "localhost", 46683,
+    @Test
+    public void testOnlyOneLeaderChosen() {
+        try {
+            new LogSetup("test3.log", Level.ALL);
+            ECSClient ecs = new ECSClient("localhost", 5100);
+            KVServer server0 = new KVServer("localhost", 5100, "localhost", 42609,
                     0, "None", System.getProperty("user.dir"));
-            Thread.sleep(3000);
-            // server3 should be registered
-            assert server2.checkRegisterStatus();
+            Thread.sleep(1000);
+            KVServer server1 = new KVServer("localhost", 5100, "localhost", 42157,
+                    0, "None", System.getProperty("user.dir"));
+            Thread.sleep(1000);
+            KVServer server2 = new KVServer("localhost", 5100, "localhost", 46683,
+                    0, "None", System.getProperty("user.dir"));
+            Thread.sleep(1000);
+
+            List<KVServer> servers = new ArrayList<>();
+            servers.add(server0);
+            servers.add(server1);
+            servers.add(server2);
+
+            ecs.kill();
+            Thread.sleep(4000);
+
+            int countLeaders = 0;
+
+            if (server0.ecsClient != null) {
+                countLeaders += 1;
+            }
+            if (server1.ecsClient != null) {
+                countLeaders += 1;
+            }
+            if (server2.ecsClient != null) {
+                countLeaders += 1;
+            }
+
+            Assert.assertEquals(countLeaders, 1);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Test
+    public void testNewECSClientCanAddServer() {
+        try {
+            new LogSetup("test3.log", Level.ALL);
+            ECSClient ecs = new ECSClient("localhost", 5100);
+            KVServer server0 = new KVServer("localhost", 5100, "localhost", 42609,
+                    0, "None", System.getProperty("user.dir"));
+            Thread.sleep(1000);
+            ecs.kill();
+            Thread.sleep(4000);
+            KVServer server1 = new KVServer("localhost", 42609, "localhost", 46683,
+                    0, "None", System.getProperty("user.dir"));
+            Thread.sleep(1000);
+
+            Assert.assertEquals(server1.getMetadata().size(), 1);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

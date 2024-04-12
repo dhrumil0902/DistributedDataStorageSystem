@@ -92,9 +92,12 @@ public class KVStore implements KVCommInterface {
 		KVMessage responseMessage =  KVMessageImpl.fromString(response);
 		logger.info("Received message: " + responseMessage.getStatus());
 		if (responseMessage.getStatus() == KVMessage.StatusType.DISCONNECT) {
-			metadata.delete(HashUtils.getHash(nodeName));
+//			metadata.delete(HashUtils.getHash(nodeName));
+			metadata = responseMessage.getMetadata();
+			logger.info("Client: Disconnect from server and update metadata.");
 			disconnect();
 			if(!metadata.isEmpty()) {
+				logger.info("Client: Reconnect to existing server...");
 				IECSNode node = metadata.getNodeFromKey(HashUtils.getHash(nodeName));
 				this.address = node.getNodeHost();
 				this.port = node.getNodePort();
@@ -109,7 +112,7 @@ public class KVStore implements KVCommInterface {
 		return responseMessage;
 	}
 
-	private void updateMetadata() throws Exception {
+	public void updateMetadata() throws Exception {
 		keyrange();
 	}
 

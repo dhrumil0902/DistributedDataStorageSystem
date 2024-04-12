@@ -53,7 +53,7 @@ public class CommManager {
                 clientSocket.close();
                 clientSocket = null;
                 isConnected = false;
-                logger.info("Connection terminated");
+                logger.info("Client: Connection terminated");
             }
         } catch (IOException e) {
             logger.error("Error! Unable to close connection!");

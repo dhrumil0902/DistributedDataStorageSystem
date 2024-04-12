@@ -379,7 +379,10 @@ public class ClientConnection implements Runnable {
     public void close() throws IOException {
         if (isOpen) {
             isOpen = false;
-//            sendMessage("DISCONNECT");
+            KVMessage message = new KVMessageImpl();
+            message.setStatus(StatusType.DISCONNECT);
+            message.setMetadata(kvServer.getMetadata());
+            sendKVMessage(message.toString());
         }
     }
 

@@ -65,7 +65,7 @@ public class KVMessageImpl implements KVMessage, Serializable {
             throw new IllegalArgumentException("Cannot build keyrange string: metadata does not exist");
         }
         StringBuilder sb = new StringBuilder();
-        sb.append("KEYRANGE_SUCCESS ");
+//        sb.append("KEYRANGE_SUCCESS ");
         for (String key : metadata.keys()) {
             ECSNode node = metadata.bst.get(key);
             sb.append(node.getNodeHashRange()[0])
@@ -181,7 +181,7 @@ public class KVMessageImpl implements KVMessage, Serializable {
                 case KEYRANGE_READ_SUCCESS:
                     return KVMessageImpl.fromKeyRange(message, status);
                 case DISCONNECT:
-                    return new KVMessageImpl(status);
+                    return KVMessageImpl.fromKeyRange(message, status);
                 default:
                     throw new IllegalArgumentException("Invalid status: " + splitMessage[0]);
             }
@@ -222,11 +222,13 @@ public class KVMessageImpl implements KVMessage, Serializable {
             case KEYRANGE_ERROR:
                 return "KEYRANGE_ERROR";
             case KEYRANGE_SUCCESS:
-                return getKeyrangeString();
+                return "KEYRANGE_SUCCESS " + getKeyrangeString();
             case KEYRANGE_READ_SUCCESS:
                 return getKeyrangeReadString();
             case KEYRANGE_READ:
                 return "KEYRANGE_READ";
+            case DISCONNECT:
+                return "DISCONNECT " + getKeyrangeString();
             default:
                 return "FAILED Unexpected status type when serializing";
         }

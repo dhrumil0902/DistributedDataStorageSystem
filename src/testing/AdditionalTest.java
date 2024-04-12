@@ -1,5 +1,6 @@
 package testing;
 
+import client.KVStore;
 import shared.Heartbeat;
 import app_kvServer.KVServer;
 import logger.LogSetup;
@@ -624,4 +625,23 @@ public class AdditionalTest extends TestCase {
         }
     }
 
+    @Test
+    public void testServerDisconnect() {
+        try {
+            new LogSetup("test4.log", Level.ALL);
+            ECSClient ecs = new ECSClient("localhost", 5100);
+            KVServer server0 = new KVServer("localhost", 5100, "localhost", 42609,
+                    0, "None", System.getProperty("user.dir"));
+            KVServer server1 = new KVServer("localhost", 5100, "localhost", 42157,
+                    0, "None", System.getProperty("user.dir"));
+            Thread.sleep(3000);
+            KVStore kvStore = new KVStore("localhost", 42609);
+            kvStore.connect();
+            server0.close();
+            Thread.sleep(5000);
+            kvStore.updateMetadata();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 }

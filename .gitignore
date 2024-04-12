@@ -1,9 +1,9 @@
 .vscode/
 /logs/
 
-m3-client.jar
-m3-server.jar
-m3-ecs.jar
+m4-client.jar
+m4-server.jar
+m4-ecs.jar
 SERVER_MANIFEST.MF
 CLIENT_MANIFEST.MF
 ECS_MANIFEST.MF

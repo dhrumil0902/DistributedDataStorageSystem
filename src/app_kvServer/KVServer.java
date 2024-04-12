@@ -3,6 +3,7 @@ package app_kvServer;
 import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.*;
 import java.util.AbstractMap.SimpleEntry;
 
@@ -753,6 +754,11 @@ public class KVServer implements IKVServer, Runnable {
                 if (!node.predecessors.contains(hashofReplicationStorage)) {
                     //removeReplicationFileAndGetAllData(hashofReplicationStorage);
                     replicationsStored.get(hashofReplicationStorage).removeAllData();
+                    try {
+                        Files.delete(replicationsStored.get(hashofReplicationStorage).filePath);
+                    } catch (IOException e) {
+                        logger.error("Unable to delete file: " + replicationsStored.get(hashofReplicationStorage).filePath);
+                    }
                     iterator.remove();
                     replicationsStored.remove(hashofReplicationStorage);
                 }
@@ -1045,6 +1051,7 @@ public class KVServer implements IKVServer, Runnable {
             successorNode.getNodeHashRange()[0] = removeNode.getNodeHashRange()[0];
             metadata.delete(removeNodeHash);
         }
+        storage.removeAllData();
         this.kill();
         logger.info("Removed a node from the bst, current state of bst: " + metadata.print());
         ecsClient = new ECSClient(this.address, this.port, metadata);

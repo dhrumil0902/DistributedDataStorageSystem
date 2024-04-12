@@ -31,9 +31,7 @@ public class HeartbeatServer {
         running = true;
         while (isRunning()) {
             try {
-                System.out.println("HEREEEEEEEEEEEEEEEEEEEBEFROE");
                 kvServer.sendHeartbeats();
-                System.out.println("HEREEEEEEEEEEEEEEEEEEE");
             } catch (Exception e) {
                 System.out.println(e);
             }

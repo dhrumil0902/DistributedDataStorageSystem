@@ -1,9 +1,13 @@
-# M4
+# Distributed System Data Storage
 
-This repo contains an implementation of a leader election strategy for recovery in the case of the external configuration service (ECS) failing. The design builds on the work done in Milestone 3 using a failure detection mechanism, an implementation of a leader election algorithm for selecting the new ECS, and a strategy for converting the elected node into the new ECS. The main advantage of this approach is that it provides availability in the case of the ECS failing, thus the ECS is no longer a single point of failure as in M2 and M3.
+This distributed data storage system can accommodate as many servers and clients as needed. The servers coordinate with each other to replicate data in case one of them randomly crashes. A 'leader' server, known as the External Configuration Service (ECS), manages tasks such as adding new servers to the system or handling server crashes. The ECS monitors the health of all servers by continuously sending a 'heartbeat' signal to each one and ensuring they respond.However, if the ECS itself fails, we have implemented a leader election strategy that allows one of the remaining servers to assume the role of the ECS.
 
-In order to verify the functionality of this Milestone, please follow the following steps:
+Additionally, we have implemented a 'consistent hashing' algorithm, which efficiently distributes the load among servers when clients modify or retrieve values from the database. This algorithm allows an easy way to re-distribute data that a server is responsible for when it crashes, and also replication of data between servers. More information about it can be found here: https://www.geeksforgeeks.org/consistent-hashing/.
 
+Demo: https://www.youtube.com/watch?v=THoMuKXWlX0
+
+If you want to use the system, follow the steps below. You will need Java installed on your machine.
+### HOW TO USE THE SYSTEM?
 1. Build the application using `ant`
 2. Launch the ECS using `java -jar m4-ecs.jar`. By default, the ECS uses the address `localhost:5100`. Use `-h` for a full list of options when starting the ECS.
 3. In different terminal windows, launch several KV servers using `java -jar m4-server.jar -p <port_number>`. `<port_number>` should be unique for each KV server. If you have changed address of the ECS, you will additionally need to use the `-b` tag to specify the address of the ECS. Use `-h` for a full list of options when starting the KV servers.

@@ -1050,8 +1050,8 @@ public class KVServer implements IKVServer, Runnable {
             sendMessage(successorNode, new ECSMessage(ActionType.UNSET_WRITE_LOCK, true, null, null, metadata));
             successorNode.getNodeHashRange()[0] = removeNode.getNodeHashRange()[0];
             metadata.delete(removeNodeHash);
+            storage.removeAllData();
         }
-        storage.removeAllData();
         this.kill();
         logger.info("Removed a node from the bst, current state of bst: " + metadata.print());
         ecsClient = new ECSClient(this.address, this.port, metadata);
